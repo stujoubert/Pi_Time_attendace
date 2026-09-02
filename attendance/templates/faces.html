@@ -1,0 +1,201 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ T.face_management }}{% endblock %}
+{% block topbar_actions %}
+<a href="/faces/devices" class="btn-sm btn-ghost">
+  <i class="bi bi-hdd-network"></i> <span class="hide-xs">{{ T.face_device_status }}</span>
+</a>
+<form method="post" action="/faces/sync" style="display:inline;">
+  <button class="btn-sm btn-primary" type="submit"
+    onclick="return confirm('{{ T.face_sync_confirm }}')">
+    <i class="bi bi-arrow-repeat"></i> <span class="hide-xs">{{ T.face_full_sync }}</span>
+  </button>
+</form>
+{% endblock %}
+{% block content %}
+
+<!-- Bulk Upload -->
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header-row" style="margin-bottom:12px;">
+    <div class="card-title"><i class="bi bi-cloud-upload" style="color:var(--accent)"></i> Bulk Upload Faces</div>
+  </div>
+  <div style="padding:16px;">
+    <form method="POST" action="{{ url_for('faces.bulk_upload_faces') }}" enctype="multipart/form-data">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+        <input type="file" name="face_files" multiple accept=".jpg,.jpeg,.png"
+               class="form-control" style="flex:1;min-width:200px;">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-upload"></i> Upload & Push to Devices
+        </button>
+      </div>
+      <div style="font-size:0.85em;color:#888;margin-top:6px;">
+        Files must be named <strong>{employee_id}.jpg</strong> (e.g. 220001.jpg)
+      </div>
+    </form>
+  </div>
+</div>
+
+<style>
+.hide-xs { display:inline; }
+@media(max-width:480px){ .hide-xs { display:none; } }
+
+/* Face user cards — mobile-first */
+.face-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
+  gap:12px;
+}
+@media(max-width:400px){
+  .face-grid { grid-template-columns:repeat(2,1fr); gap:8px; }
+}
+.face-card {
+  background:var(--card-bg);border:0.5px solid var(--border);
+  border-radius:var(--radius-lg);padding:12px;
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+  text-align:center;position:relative;
+}
+.face-thumb {
+  width:72px;height:72px;border-radius:12px;object-fit:cover;
+  border:0.5px solid var(--border);background:var(--bg);
+  display:flex;align-items:center;justify-content:center;
+  font-size:28px;color:var(--muted);flex-shrink:0;
+}
+.face-thumb img { width:72px;height:72px;border-radius:12px;object-fit:cover; }
+.face-name { font-weight:600;font-size:13px;color:var(--text);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%; }
+.face-id { font-size:11px;color:var(--muted);font-family:var(--mono); }
+.face-badge { font-size:10px;padding:2px 7px; }
+.face-btns { display:flex;gap:4px;justify-content:center;width:100%; }
+.face-btn { padding:5px 8px;font-size:12px;border-radius:7px;border:0.5px solid var(--border);
+  background:transparent;cursor:pointer;color:var(--text);text-decoration:none;display:inline-flex;
+  align-items:center;gap:3px; }
+.face-btn:hover { background:var(--bg); }
+.face-btn-danger { color:var(--danger); }
+
+/* Device action cards */
+.dev-action-card {
+  border:0.5px solid var(--border);border-radius:var(--radius-lg);
+  padding:14px;min-width:0;
+}
+</style>
+
+<!-- Stats -->
+<div class="metric-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px;">
+  <div class="metric m-blue">
+    <div class="metric-label">{{ T.face_total_users }}</div>
+    <div class="metric-value">{{ users|length }}</div>
+  </div>
+  <div class="metric m-green">
+    <div class="metric-label">{{ T.face_with_face }}</div>
+    <div class="metric-value">{{ has_face }}</div>
+  </div>
+  <div class="metric m-red">
+    <div class="metric-label">{{ T.face_no_face_count }}</div>
+    <div class="metric-value">{{ no_face }}</div>
+  </div>
+</div>
+
+<!-- Info box -->
+<div style="background:var(--color-background-info);border:0.5px solid var(--color-border-info,var(--border));
+            border-radius:var(--radius-lg);padding:12px 16px;margin-bottom:14px;font-size:13px;
+            color:var(--color-text-info);">
+  <i class="bi bi-info-circle"></i>
+  <strong>{{ T.face_workflow_title if T.face_workflow_title is defined else "Cómo funciona" }}:</strong>
+  {{ T.face_workflow_hint if T.face_workflow_hint is defined else
+     "Sube fotos desde la página de cada empleado o usa el ícono de cámara en cada tarjeta. Una vez guardadas localmente, usa 'Enviar a Todos' para sincronizar a todos los dispositivos." }}
+</div>
+
+<!-- Device actions -->
+<div class="card">
+  <div class="card-header-row" style="margin-bottom:12px;">
+    <div class="card-title"><i class="bi bi-hdd-network" style="color:var(--accent)"></i> {{ T.face_device_actions }}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+      <form method="post" action="/faces/pull-all">
+        <button class="btn-sm btn-ghost-blue" type="submit"><i class="bi bi-cloud-download"></i> {{ T.face_pull_all }}</button>
+      </form>
+      <form method="post" action="/faces/push-all">
+        <button class="btn-sm btn-ghost" type="submit"><i class="bi bi-cloud-upload"></i> {{ T.face_push_all }}</button>
+      </form>
+    </div>
+  </div>
+
+  {% if devices %}
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;">
+    {% for d in devices %}
+    <div class="dev-action-card">
+      <div style="font-weight:600;font-size:13px;margin-bottom:10px;">
+        <i class="bi bi-hdd" style="color:var(--accent2);margin-right:4px;"></i>{{ d.name }}
+        <span style="color:var(--muted);font-size:11px;display:block;">{{ d.ip }}</span>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <form method="post" action="/faces/pull/{{ d.id }}">
+          <button class="btn-sm btn-ghost-blue" type="submit"><i class="bi bi-cloud-download"></i> {{ T.face_pull }}</button>
+        </form>
+        <form method="post" action="/faces/push/{{ d.id }}">
+          <button class="btn-sm btn-ghost" type="submit"><i class="bi bi-cloud-upload"></i> {{ T.face_push }}</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p style="color:var(--muted);font-size:13px;">{{ T.no_data_range }}</p>
+  {% endif %}
+</div>
+
+<!-- Search + face grid -->
+<div class="card">
+  <div class="card-header-row" style="margin-bottom:14px;">
+    <div class="card-title"><i class="bi bi-person-bounding-box" style="color:var(--accent)"></i> {{ T.face_user_faces }}</div>
+    <input type="text" id="fsearch" class="form-control" placeholder="{{ T.search }}…"
+           style="max-width:200px;" oninput="filterFaces(this.value)">
+  </div>
+
+  <div class="face-grid" id="faceGrid">
+    {% for u in users %}
+    <div class="face-card" data-search="{{ u.name|lower }} {{ u.employee_id }}">
+      <div class="face-thumb">
+        {% if u.has_local %}
+        <img src="/faces/img/{{ u.employee_id }}" loading="lazy"
+             onerror="this.style.display='none'">
+        {% else %}
+        <i class="bi bi-person"></i>
+        {% endif %}
+      </div>
+      <div class="face-name" title="{{ u.name }}">{{ u.name }}</div>
+      <div class="face-id">{{ u.employee_id }}</div>
+      {% if u.has_local %}
+      <span class="badge badge-green face-badge"><i class="bi bi-check-circle"></i> {{ T.face_enrolled }}</span>
+      {% else %}
+      <span class="badge badge-red face-badge">{{ T.face_no_face }}</span>
+      {% endif %}
+      <div class="face-btns">
+        <label class="face-btn" title="{{ T.upload }}">
+          <i class="bi bi-upload"></i>
+          <form method="post" action="/faces/upload/{{ u.employee_id }}"
+                enctype="multipart/form-data" style="display:none;"
+                id="uf_{{ u.employee_id }}">
+            <input type="file" name="face_file" accept="image/jpeg,image/png"
+                   onchange="document.getElementById('uf_{{ u.employee_id }}').submit()">
+          </form>
+        </label>
+        {% if u.has_local %}
+        <form method="post" action="/faces/delete/{{ u.employee_id }}"
+              onsubmit="return confirm('{{ T.face_delete_confirm }}')">
+          <button class="face-btn face-btn-danger" type="submit"><i class="bi bi-trash"></i></button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<script>
+function filterFaces(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('.face-card').forEach(c => {
+    c.style.display = c.dataset.search.includes(q) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}

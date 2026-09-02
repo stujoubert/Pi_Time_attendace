@@ -1,0 +1,94 @@
+{% extends "layout.html" %}
+{% block page_title %}Capability Probe{% endblock %}
+{% block content %}
+<div class="card" style="max-width:760px;">
+  <div class="card-header-row">
+    <div class="card-title">Capability Probe — {{ device.name }} ({{ device.ip }})</div>
+    <a href="{{ url_for('devices.devices_page') }}" class="btn-sm btn-ghost">← {{ T.back }}</a>
+  </div>
+
+  <p style="color:#666;font-size:0.9em;margin:8px 0 16px;">
+    Read-only checks against this device. No users or faces are created, modified, or deleted.
+  </p>
+
+  {% set labels = {
+    'reachable': 'Reachable / device info',
+    'clock_sync': 'Clock vs server (event-time accuracy)',
+    'user_search': 'User list (UserInfo/Search)',
+    'event_fetch': 'Event fetch (AcsEvent)',
+    'face_list': 'Face library (FDLib list)',
+    'fdsearch_supported': 'Face download (FDSearch)',
+    'precheck': 'Pre-check (test id free)',
+    'user_create': 'Create user (RightPlan fallback)',
+    'user_readback': 'User readback',
+    'face_upload': 'Face upload',
+    'face_readback': 'Face readback',
+    'face_cleanup': 'Cleanup: delete face',
+    'user_cleanup': 'Cleanup: delete user'
+  } %}
+
+  {% if write_test %}
+  <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:0.9em;">
+    <strong>Write test.</strong> A throwaway user (<code>_PROBE_TEST</code>) was created and then deleted. Confirm the cleanup rows below show PASS.
+  </div>
+  {% endif %}
+
+  <table style="width:100%;border-collapse:collapse;">
+    <thead>
+      <tr style="text-align:left;border-bottom:2px solid #e9ecef;">
+        <th style="padding:8px;">Capability</th>
+        <th style="padding:8px;width:90px;">Result</th>
+        <th style="padding:8px;">Detail</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for key, r in results.items() %}
+      <tr style="border-bottom:1px solid #f1f3f5;">
+        <td style="padding:8px;">{{ labels.get(key, key) }}</td>
+        <td style="padding:8px;">
+          {% if r.ok is none %}
+            <span style="background:#e9ecef;color:#666;padding:2px 10px;border-radius:10px;font-size:0.8em;font-weight:600;">SKIP</span>
+          {% elif r.ok %}
+            <span style="background:#d1e7dd;color:#0f5132;padding:2px 10px;border-radius:10px;font-size:0.8em;font-weight:600;">PASS</span>
+          {% else %}
+            <span style="background:#f8d7da;color:#842029;padding:2px 10px;border-radius:10px;font-size:0.8em;font-weight:600;">FAIL</span>
+          {% endif %}
+        </td>
+        <td style="padding:8px;color:#555;font-size:0.88em;font-family:monospace;">{{ r.detail }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div style="margin-top:18px;">
+    <form method="post" action="{{ url_for('devices.device_probe', device_id=device.id) }}" style="display:inline;">
+      <button class="btn-sm btn-ghost-blue" type="submit"><i class="bi bi-arrow-repeat"></i> Re-run probe</button>
+    </form>
+    <form method="post" action="{{ url_for('devices.device_detect', device_id=device.id) }}" style="display:inline;"
+          onsubmit="return confirm('Re-detect the device profile? This briefly creates and deletes a _PROFILE_PROBE test user to learn the device dialect.');">
+      <button class="btn-sm btn-ghost" type="submit"><i class="bi bi-magic"></i> Re-detect profile</button>
+    </form>
+  </div>
+
+  {% if stored_profile %}
+  <div style="margin-top:18px;border-top:1px solid #e9ecef;padding-top:14px;">
+    <div style="font-weight:600;margin-bottom:8px;">Stored device profile</div>
+    <table style="width:100%;border-collapse:collapse;font-size:0.88em;">
+      <tr><td style="padding:4px 8px;color:#666;">Auth scheme</td>
+          <td style="padding:4px 8px;font-family:monospace;">{{ stored_profile.auth_scheme or '—' }}</td></tr>
+      <tr><td style="padding:4px 8px;color:#666;">Needs RightPlan</td>
+          <td style="padding:4px 8px;font-family:monospace;">{{ stored_profile.rightplan if stored_profile.rightplan is not none else '—' }}</td></tr>
+      <tr><td style="padding:4px 8px;color:#666;">Delete verb</td>
+          <td style="padding:4px 8px;font-family:monospace;">{{ stored_profile.delete_verb or '—' }}</td></tr>
+      <tr><td style="padding:4px 8px;color:#666;">Detected at</td>
+          <td style="padding:4px 8px;font-family:monospace;">{{ stored_profile.detected_at or '—' }}</td></tr>
+    </table>
+    {% if stored_profile.notes %}
+    <ul style="margin-top:8px;font-size:0.85em;color:#555;">
+      {% for n in stored_profile.notes %}<li>{{ n }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

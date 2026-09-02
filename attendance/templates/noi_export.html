@@ -1,0 +1,83 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ T.noi_export_title if T.noi_export_title else 'Export to Aspel NOI' }}{% endblock %}
+{% block content %}
+
+<div class="card" style="margin-bottom:18px;">
+  <div class="card-title" style="margin-bottom:10px;">{{ T.noi_export_title if T.noi_export_title else 'Export to Aspel NOI' }}</div>
+  <p style="color:#666;font-size:0.88em;margin-bottom:14px;">
+    {{ T.noi_export_help if T.noi_export_help else 'Generates the import files for Aspel NOI. In NOI, use the import wizard (pre-nómina / movimientos), map the columns once, and save the definition for future periods.' }}
+  </p>
+  <form method="get" action="{{ url_for('noi_export.export_page') }}"
+        style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+    <div class="form-row">
+      <label class="form-label">{{ T.hol_start if T.hol_start else 'Start' }}</label>
+      <input type="date" name="start" class="form-control" value="{{ start }}" required>
+    </div>
+    <div class="form-row">
+      <label class="form-label">{{ T.hol_end if T.hol_end else 'End' }}</label>
+      <input type="date" name="end" class="form-control" value="{{ end }}" required>
+    </div>
+    <button class="btn-sm btn-ghost-blue" type="submit"><i class="bi bi-arrow-repeat"></i> {{ T.noi_preview if T.noi_preview else 'Preview' }}</button>
+  </form>
+
+  <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;">
+    <a class="btn-sm btn-success" href="{{ url_for('noi_export.download_incidencias', start=start, end=end) }}">
+      <i class="bi bi-file-earmark-excel"></i> {{ T.noi_dl_incidencias if T.noi_dl_incidencias else 'Download incidencias (días y horas)' }}
+    </a>
+    <a class="btn-sm btn-success" href="{{ url_for('noi_export.download_vacaciones', start=start, end=end) }}">
+      <i class="bi bi-file-earmark-excel"></i> {{ T.noi_dl_vacaciones if T.noi_dl_vacaciones else 'Download vacaciones' }}
+    </a>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:18px;">
+  <div class="card-title" style="margin-bottom:10px;">
+    {{ T.noi_preview if T.noi_preview else 'Preview' }} — {{ start }} → {{ end }}
+    <span style="font-size:0.75em;color:#666;font-weight:400;margin-left:10px;">
+      {{ totals.faltas }} faltas · {{ totals.retardos }} retardos · {{ totals.vac_rows }} vacaciones
+    </span>
+  </div>
+  <table style="width:100%;border-collapse:collapse;font-size:0.88em;">
+    <thead><tr style="text-align:left;border-bottom:2px solid #e9ecef;">
+      <th style="padding:6px 8px;">{{ T.hol_employee if T.hol_employee else 'Employee' }}</th>
+      <th style="padding:6px 8px;">Días trabajados</th>
+      <th style="padding:6px 8px;">Faltas</th>
+      <th style="padding:6px 8px;">Retardos</th>
+      <th style="padding:6px 8px;">Días vacaciones</th>
+    </tr></thead>
+    <tbody>
+      {% for emp_id, r in summary.items() %}
+      <tr style="border-bottom:1px solid #f1f3f5;">
+        <td style="padding:6px 8px;">{{ r.name }} <span style="color:#999;font-size:0.85em;">#{{ emp_id }}</span></td>
+        <td style="padding:6px 8px;">{{ r.dias_trabajados }}</td>
+        <td style="padding:6px 8px;{% if r.faltas %}color:#842029;font-weight:600;{% endif %}">{{ r.faltas }}</td>
+        <td style="padding:6px 8px;{% if r.retardos %}color:#664d03;font-weight:600;{% endif %}">{{ r.retardos }}</td>
+        <td style="padding:6px 8px;{% if r.dias_vacaciones %}color:#084298;font-weight:600;{% endif %}">{{ r.dias_vacaciones }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if vacations %}
+<div class="card">
+  <div class="card-title" style="margin-bottom:10px;">Vacaciones ({{ vacations|length }})</div>
+  <table style="width:100%;border-collapse:collapse;font-size:0.88em;">
+    <thead><tr style="text-align:left;border-bottom:2px solid #e9ecef;">
+      <th style="padding:6px 8px;">{{ T.hol_employee if T.hol_employee else 'Employee' }}</th>
+      <th style="padding:6px 8px;">{{ T.hol_dates if T.hol_dates else 'Dates' }}</th>
+      <th style="padding:6px 8px;">{{ T.hol_days if T.hol_days else 'Days' }}</th>
+    </tr></thead>
+    <tbody>
+      {% for v in vacations %}
+      <tr style="border-bottom:1px solid #f1f3f5;">
+        <td style="padding:6px 8px;">{{ v.name }} <span style="color:#999;font-size:0.85em;">#{{ v.employee_id }}</span></td>
+        <td style="padding:6px 8px;">{{ v.fecha_inicio }} → {{ v.fecha_fin }}</td>
+        <td style="padding:6px 8px;">{{ v.dias }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

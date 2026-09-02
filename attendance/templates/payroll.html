@@ -1,0 +1,166 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ T.nav_payroll }}{% endblock %}
+{% block topbar_actions %}
+<a href="{{ url_for('payroll.export_weekly', period_type=period_type, week_type=week_type, week=week_start.isoformat(), dept=selected_dept or '') }}"
+   class="btn-sm btn-ghost-blue"><i class="bi bi-download"></i> {{ T.weekly_excel }}</a>
+<a href="{{ url_for('payroll.export_department', period_type=period_type, week_type=week_type, week=week_start.isoformat(), dept=selected_dept or '') }}"
+   class="btn-sm btn-ghost"><i class="bi bi-diagram-3"></i> {{ T.by_dept }}</a>
+<a href="{{ url_for('payroll.export_monthly', year=week_start.year, month=week_start.month, dept=selected_dept or '') }}"
+   class="btn-sm btn-ghost"><i class="bi bi-calendar-month"></i> {{ T.monthly }}</a>
+{% endblock %}
+{% block content %}
+
+<div class="card">
+  <form method="get" class="filter-bar" >
+
+    <!-- Period type selector -->
+    <div>
+      <label class="form-label">{{ T.nomina_period_type }}</label>
+      <select name="period_type" class="form-select"  onchange="this.form.submit()">
+        <option value="weekly"   {% if period_type=='weekly'   %}selected{% endif %}>{{ T.week_type }}</option>
+        <option value="quincena" {% if period_type=='quincena' %}selected{% endif %}>{{ T.nomina_quincena }}</option>
+      </select>
+    </div>
+
+    {% if period_type == 'weekly' %}
+    <!-- Week type (only for weekly) -->
+    <div>
+      <label class="form-label">{{ T.week_type }}</label>
+      <select name="week_type" class="form-select"  onchange="this.form.submit()">
+        <option value="mon_sat" {% if week_type=='mon_sat' %}selected{% endif %}>{{ T.mon_sat }}</option>
+        <option value="mon_fri" {% if week_type=='mon_fri' %}selected{% endif %}>{{ T.mon_fri }}</option>
+        <option value="sat_fri" {% if week_type=='sat_fri' %}selected{% endif %}>{{ T.sat_fri }}</option>
+        <option value="sun_sat" {% if week_type=='sun_sat' %}selected{% endif %}>{{ T.sun_sat }}</option>
+      </select>
+    </div>
+    {% endif %}
+
+    <!-- Period selector -->
+    <div>
+      <label class="form-label">
+        {% if period_type == 'quincena' %}{{ T.nomina_period }}{% else %}{{ T.week_prefix }}{% endif %}
+      </label>
+      <select name="week" class="form-select"  onchange="this.form.submit()">
+        {% for ws, we, label in week_list %}
+        <option value="{{ ws.isoformat() }}" {% if ws == week_start %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Department filter -->
+    {% if depts %}
+    <div>
+      <label class="form-label">{{ T.nav_departments }}</label>
+      <select name="dept" class="form-select"  onchange="this.form.submit()">
+        <option value="">{{ T.all_departments if T.all_departments is defined else 'Todos' }}</option>
+        {% for d in depts %}
+        <option value="{{ d.id }}" {% if selected_dept == d.id|string %}selected{% endif %}>{{ d.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+
+    <!-- Employee filter -->
+    <div>
+      <label class="form-label">{{ T.user }}</label>
+      <select name="user" class="form-select"  onchange="this.form.submit()">
+        <option value="">{{ T.all_users }}</option>
+        {% for u in users %}
+        <option value="{{ u.employee_id }}" {% if selected_user == u.employee_id|string %}selected{% endif %}>{{ u.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+  </form>
+</div>
+
+{% if period_type == 'quincena' %}
+<!-- Quincena summary banner -->
+<div style="background:var(--color-background-info);border:0.5px solid var(--color-border-tertiary);
+            border-radius:var(--radius-lg);padding:10px 16px;margin-bottom:14px;
+            font-size:13px;color:var(--color-text-info);display:flex;align-items:center;gap:8px;">
+  <i class="bi bi-calendar-range"></i>
+  <strong>{{ T.nomina_quincena }}:</strong>
+  {{ week_start.strftime('%d/%m/%Y') }} — {{ week_end.strftime('%d/%m/%Y') }}
+  &nbsp;·&nbsp; {{ week_dates|length }} {{ T.days }}
+</div>
+{% endif %}
+
+{% if data %}
+<div class="card payroll-table-wrap" style="overflow-x:auto;">
+  <table class="t" style="min-width:700px;">
+    <thead>
+      <tr>
+        <th style="width:80px;">ID</th>
+        <th>{{ T.name }}</th>
+        {% for d in week_dates %}
+        <th colspan="2" style="text-align:center;font-size:11px;">
+          {% if current_lang == 'es' %}
+            {{ ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'][d.weekday()] }} {{ d.strftime('%d/%m') }}
+          {% else %}
+            {{ d.strftime('%a %d/%m') }}
+          {% endif %}
+        </th>
+        {% endfor %}
+        <th>{{ T.total_h }}</th>
+        <th>{{ T.days }}</th>
+      </tr>
+      <tr style="background:#F1F5F9;">
+        <th colspan="2"></th>
+        {% for d in week_dates %}
+        <th style="font-size:10px;">{{ T.in }}</th>
+        <th style="font-size:10px;">{{ T.out }}</th>
+        {% endfor %}
+        <th colspan="2"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for emp_id, rec in data.items() %}
+      <tr>
+        <td class="mono" style="font-size:12px;">{{ emp_id }}</td>
+        <td style="font-weight:500;">{{ rec.name }}</td>
+        {% for d in week_dates %}
+        {% set dr = rec.days.get(d.isoformat(), {}) %}
+        <td class="mono" style="font-size:12px;{% if dr.get('flags') %}background:#FEF2F2;{% endif %}">{{ dr.get('in', '') }}</td>
+        <td class="mono" style="font-size:12px;{% if dr.get('flags') %}background:#FEF2F2;{% endif %}">{{ dr.get('out', '') }}</td>
+        {% endfor %}
+        <td style="font-weight:600;">{{ rec.total_hours }}</td>
+        <td style="color:var(--muted);">{{ rec.total_days }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+
+  </table>
+</div>
+
+<!-- Mobile card view -->
+<div class="payroll-cards">
+{% for emp_id, rec in data.items() %}
+<div class="p-card">
+  <div class="p-card-header">
+    <div>
+      <div class="p-card-name">{{ rec.name }}</div>
+      <div class="p-card-id">ID: {{ emp_id }}</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:11px;color:var(--muted)">Total</div>
+      <div style="font-weight:700;font-size:15px;">{{ rec.total_h }}h / {{ rec.days_present }}d</div>
+    </div>
+  </div>
+  {% for d in week_dates %}
+    {% set dr = rec.days.get(d.isoformat(), {}) %}
+    {% if dr %}
+    <div class="p-card-row">
+      <span class="p-card-label">{{ d.strftime('%a %d') }}</span>
+      <span>{{ dr.first_in or '—' }} → {{ dr.last_out or '—' }}</span>
+    </div>
+    {% endif %}
+  {% endfor %}
+</div>
+{% endfor %}
+</div>
+
+{% else %}
+<div class="card"><div class="empty-state"><i class="bi bi-cash-stack"></i>{{ T.no_data_range }}</div></div>
+{% endif %}
+{% endblock %}

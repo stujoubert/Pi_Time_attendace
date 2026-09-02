@@ -1,0 +1,51 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ T.add_user }}<script>
+function previewFace(inp){
+  var f = inp.files && inp.files[0];
+  var img = document.getElementById('face-preview');
+  if(!f){ img.style.display='none'; return; }
+  img.src = URL.createObjectURL(f);
+  img.style.display = 'block';
+}
+</script>
+{% endblock %}
+{% block content %}
+<div class="card" style="max-width:640px;">
+  <div class="card-header-row">
+    <div class="card-title">{{ T.add_user }}</div>
+    <a href="{{ url_for('users.users_list') }}" class="btn-sm btn-ghost">← {{ T.back }}</a>
+  </div>
+  <form method="post" action="{{ url_for('users.users_add') }}" enctype="multipart/form-data">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+      <div class="form-row">
+        <label class="form-label">{{ T.employee_id }}</label>
+        <input name="employee_id" class="form-control" value="{{ next_id }}" required>
+      </div>
+      <div class="form-row">
+        <label class="form-label">{{ T.name }}</label>
+        <input name="name" class="form-control" required>
+      </div>
+      <div class="form-row">
+        <label class="form-label">{{ T.department }}</label>
+        <select name="department_id" class="form-select">
+          <option value="">{{ T.no_department }}</option>
+          {% for d in depts %}
+          <option value="{{ d.id }}">{{ d.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+      <div class="form-row" style="margin-top:6px;">
+        <label class="form-label">{{ T.users_face_photo if T.users_face_photo else 'Face photo (optional)' }}</label>
+        <input type="file" name="face_photo" id="face-photo" accept="image/*" capture="user"
+               class="form-control" onchange="previewFace(this)">
+        <div style="font-size:0.78em;color:#888;margin-top:4px;">
+          {{ T.users_face_note if T.users_face_note else 'On a phone this opens the camera. The photo is enrolled and pushed to the terminals automatically.' }}
+        </div>
+        <img id="face-preview" style="display:none;margin-top:8px;height:110px;border-radius:8px;object-fit:cover;">
+      </div>
+
+    <button class="btn-sm btn-success" type="submit"><i class="bi bi-check-lg"></i> {{ T.save }}</button>
+  </form>
+</div>
+{% endblock %}

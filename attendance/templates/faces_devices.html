@@ -1,0 +1,100 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ T.face_device_status }}{% endblock %}
+{% block topbar_actions %}
+<a href="{{ url_for('faces.faces_overview') }}" class="btn-sm btn-ghost">{{ T.face_overview_back }}</a>
+{% endblock %}
+{% block content %}
+<div style="display:grid;gap:20px;">
+  {% for d in status %}
+  <div class="card" style="margin-bottom:0;">
+    <div class="card-header-row">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="card-title">{{ d.name }}</div>
+        <span style="color:var(--muted);font-size:12px;" class="mono">{{ d.ip }}</span>
+        {% if d.ok %}
+          <span class="badge badge-green">{{ T.online }}</span>
+        {% else %}
+          <span class="badge badge-red">{{ T.offline }}</span>
+        {% endif %}
+      </div>
+      {% if d.ok %}
+      <div style="display:flex;gap:8px;">
+        <form method="post" action="{{ url_for('faces.pull_from_device', device_id=d.id) }}">
+          <button class="btn-sm btn-ghost-blue" type="submit">
+            <i class="bi bi-cloud-download"></i> Pull Faces
+          </button>
+        </form>
+        <form method="post" action="{{ url_for('faces.push_to_device', device_id=d.id) }}">
+          <button class="btn-sm btn-ghost" type="submit">
+            <i class="bi bi-cloud-upload"></i> Push Faces
+          </button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if not d.ok %}
+    <p style="color:var(--danger);font-size:13px;"><i class="bi bi-exclamation-triangle"></i> {{ d.get('error','Cannot reach device') }}</p>
+    {% else %}
+    <!-- Summary metrics -->
+    <div style="display:grid;grid-template-columns:repeat(4,auto);gap:16px;margin-bottom:16px;">
+      <div>
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:600;">{{ T.face_db_users }}</div>
+        <div style="font-size:20px;font-weight:600;">{{ d.db_users }}</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:600;">{{ T.face_on_device }}</div>
+        <div style="font-size:20px;font-weight:600;color:var(--accent);">{{ d.users_on_device }}</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:600;">{{ T.face_on_device_count }}</div>
+        <div style="font-size:20px;font-weight:600;color:var(--accent2);">{{ d.faces_on_device }}</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:600;">{{ T.face_missing }}</div>
+        <div style="font-size:20px;font-weight:600;color:{{ 'var(--danger)' if d.missing_faces else 'var(--accent2)' }};">{{ d.missing_faces|length }}</div>
+      </div>
+    </div>
+
+    {% if d.missing_users %}
+    <div style="margin-bottom:12px;">
+      <div style="font-size:12px;font-weight:600;color:var(--warning);margin-bottom:6px;">
+        <i class="bi bi-person-x"></i> Missing user records on device ({{ d.missing_users|length }}):
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;">
+        {% for emp in d.missing_users[:30] %}
+        <span class="badge badge-amber">{{ emp }}</span>
+        {% endfor %}
+        {% if d.missing_users|length > 30 %}
+        <span class="badge badge-gray">+{{ d.missing_users|length - 30 }} more</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if d.missing_faces %}
+    <div>
+      <div style="font-size:12px;font-weight:600;color:var(--danger);margin-bottom:6px;">
+        <i class="bi bi-person-bounding-box"></i> Missing faces on device ({{ d.missing_faces|length }}):
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;">
+        {% for emp in d.missing_faces[:30] %}
+        <span class="badge badge-red">{{ emp }}</span>
+        {% endfor %}
+        {% if d.missing_faces|length > 30 %}
+        <span class="badge badge-gray">+{{ d.missing_faces|length - 30 }} more</span>
+        {% endif %}
+      </div>
+    </div>
+    {% else %}
+    <div style="color:var(--accent2);font-size:13px;font-weight:500;">
+      <i class="bi bi-check-circle-fill"></i> {{ T.face_all_ok }}
+    </div>
+    {% endif %}
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="card"><div class="empty-state"><i class="bi bi-hdd-network"></i>No active devices configured</div></div>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,177 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ T.dashboard }}{% endblock %}
+{% block topbar_actions %}
+<form method="get" action="{{ url_for('dashboard.dashboard') }}" style="display:flex;gap:8px;align-items:center;">
+  <input type="date" name="date" value="{{ selected_date }}" class="form-control" style="width:auto;" onchange="this.form.submit()">
+</form>
+{% endblock %}
+{% block head %}
+<style>
+.dash-cards { display:none; }
+@media(max-width:768px){
+  .dashboard-bottom-grid { grid-template-columns:1fr !important; }
+  .dash-event-row { display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px; }
+  .dash-event-row:last-child { border:none; }
+}
+</style>
+{% endblock %}
+{% block content %}
+
+<div id="device-health-banner"></div>
+<script>
+fetch('/devices/health')
+  .then(r => r.json())
+  .then(data => {
+    if (data.offline && data.offline.length > 0) {
+      document.getElementById('device-health-banner').innerHTML = `
+        <div style="background:#f8d7da;border:1px solid #dc3545;border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <i class="bi bi-wifi-off" style="font-size:1.3rem;color:#dc3545;"></i>
+            <span><strong>Device${data.offline.length !== 1 ? 's' : ''} offline:</strong> ${data.offline.join(', ')} — events are NOT being collected</span>
+          </div>
+          <a href="/devices/" class="btn btn-sm" style="background:#dc3545;color:#fff;white-space:nowrap;">
+            <i class="bi bi-hdd-network"></i> View Devices
+          </a>
+        </div>`;
+    }
+  }).catch(() => {});
+</script>
+<div id="missing-faces-banner"></div>
+<script>
+fetch('/faces/missing-count')
+  .then(r => r.json())
+  .then(data => {
+    if (data.count > 0) {
+      document.getElementById('missing-faces-banner').innerHTML = `
+        <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <i class="bi bi-person-x" style="font-size:1.3rem;color:#e67e00;"></i>
+            <span><strong>${data.count} employee${data.count !== 1 ? 's' : ''}</strong> without a face photo on device</span>
+          </div>
+          <a href="/faces/devices" class="btn btn-sm" style="background:#e67e00;color:#fff;white-space:nowrap;">
+            <i class="bi bi-camera"></i> View Missing
+          </a>
+        </div>`;
+    }
+  }).catch(() => {});
+</script>
+
+<div class="metric-grid">
+  <div class="metric m-blue">
+    <div class="metric-label">{{ T.attended }}</div>
+    <div class="metric-value">{{ attended }}</div>
+    <div class="metric-sub">of {{ expected }} expected</div>
+  </div>
+  <div class="metric m-red">
+    <div class="metric-label">{{ T.absent }}</div>
+    <div class="metric-value">{{ absent }}</div>
+    {% if on_holiday_count %}<div style="font-size:11px;color:#084298;">+{{ on_holiday_count }} {{ T.hol_vacation if T.hol_vacation else 'Vacaciones' }}</div>{% endif %}
+    <div class="metric-sub">&nbsp;</div>
+  </div>
+  <div class="metric m-green">
+    <div class="metric-label">{{ T.attendance_rate }}</div>
+    <div class="metric-value">{{ attendance_rate }}%</div>
+    <div class="metric-sub">&nbsp;</div>
+  </div>
+</div>
+
+<div class="dashboard-bottom-grid">
+
+  <!-- Department breakdown -->
+  <div class="card" style="margin-bottom:0">
+    <div class="card-header-row">
+      <div class="card-title"><i class="bi bi-diagram-3" style="color:var(--accent)"></i> By Department</div>
+    </div>
+    {% if dept_stats %}
+    <table class="t">
+      <thead><tr><th>Department</th><th>Total</th><th>Present</th><th>%</th></tr></thead>
+      <tbody>
+        {% for d in dept_stats %}
+        <tr>
+          <td>{{ d.dept }}</td>
+          <td>{{ d.total }}</td>
+          <td><span class="badge badge-green">{{ d.present }}</span></td>
+          <td>{{ (d.present / d.total * 100)|round(0)|int if d.total else 0 }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state"><i class="bi bi-diagram-3"></i>No department data</div>
+    {% endif %}
+  </div>
+
+  <!-- Recent events -->
+  <div class="card" style="margin-bottom:0">
+    <div class="card-header-row">
+      <div class="card-title"><i class="bi bi-activity" style="color:var(--accent2)"></i> Recent Events</div>
+    </div>
+    {% if recent %}
+    <div class="table-wrap">
+    <table class="t">
+      <thead><tr><th>Employee</th><th>Time</th><th>Dir</th><th>Device</th></tr></thead>
+      <tbody>
+        {% for r in recent %}
+        <tr>
+          <td>{{ r.name }}</td>
+          <td class="mono" style="font-size:12px;">{{ r.timestamp[11:16] }}</td>
+          <td>
+            {% if r.direction == 'IN' %}<span class="badge badge-green">IN</span>
+            {% else %}<span class="badge badge-gray">OUT</span>{% endif %}
+          </td>
+          <td style="color:var(--muted);font-size:12px;">{{ r.device_name or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty-state"><i class="bi bi-activity"></i>No recent events</div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Monthly summary -->
+<div class="card">
+  <div class="card-header-row">
+    <div class="card-title">{{ T.monthly_summary }} — {{ month_label }}</div>
+    <a href="{{ url_for('payroll.export_monthly', year=selected_date[:4], month=selected_date[5:7]) }}"
+       class="btn-sm btn-ghost-blue"><i class="bi bi-download"></i>{{ T.weekly_excel }}</a>
+  </div>
+  {% if monthly %}
+  <div class="table-wrap">
+  <table class="t">
+    <thead>
+      <tr>
+        <th>{{ T.employee_id }}</th>
+        <th>{{ T.name }}</th>
+        <th>{{ T.department }}</th>
+        <th>Days / {{ days_in_month }} {{ T.days_of }}</th>
+        <th>%</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in monthly %}
+      <tr>
+        <td class="mono">{{ r.employee_id }}</td>
+        <td>{{ r.name }}</td>
+        <td><span class="badge badge-blue">{{ r.dept }}</span></td>
+        <td>{{ r.days_present }}</td>
+        <td>
+          {% set pct = (r.days_present / days_in_month * 100)|round(0)|int %}
+          <span class="badge {% if pct >= 90 %}badge-green{% elif pct >= 70 %}badge-amber{% else %}badge-red{% endif %}">
+            {{ pct }}%
+          </span>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="empty-state">No data</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty-state"><i class="bi bi-calendar-x"></i>{{ T.no_data_range }}</div>
+  {% endif %}
+</div>
+{% endblock %}

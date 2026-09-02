@@ -1,0 +1,90 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ T.hol_team_calendar if T.hol_team_calendar else 'Team Calendar' }}{% endblock %}
+{% block content %}
+
+{% set month_names = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'] %}
+
+<div class="card-header-row" style="margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+  <div class="card-title" style="display:flex;align-items:center;gap:10px;">
+    <a href="{{ url_for('holidays.hr_calendar', year=prev_y, month=prev_m, user=emp_filt, department=dept_filt) }}"
+       class="btn-sm btn-ghost">‹</a>
+    {{ month_names[month-1] }} {{ year }}
+    <a href="{{ url_for('holidays.hr_calendar', year=next_y, month=next_m, user=emp_filt, department=dept_filt) }}"
+       class="btn-sm btn-ghost">›</a>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <form method="get" action="{{ url_for('holidays.hr_calendar') }}" style="display:flex;gap:8px;align-items:center;">
+      <input type="hidden" name="year" value="{{ year }}">
+      <input type="hidden" name="month" value="{{ month }}">
+      <select name="user" class="form-select" style="min-width:150px;" onchange="this.form.submit()">
+        <option value="">{{ T.hol_all_employees if T.hol_all_employees else 'All employees' }}</option>
+        {% for e in employees %}
+        <option value="{{ e.employee_id }}" {% if emp_filt == e.employee_id|string %}selected{% endif %}>{{ e.name }}</option>
+        {% endfor %}
+      </select>
+      <select name="department" class="form-select" style="min-width:150px;" onchange="this.form.submit()">
+        <option value="">{{ T.hol_all_departments if T.hol_all_departments else 'All departments' }}</option>
+        {% for d in departments %}
+        <option value="{{ d.id }}" {% if dept_filt == d.id|string %}selected{% endif %}>{{ d.name }}</option>
+        {% endfor %}
+      </select>
+    </form>
+    <a href="{{ url_for('holidays.hr_queue') }}" class="btn-sm btn-ghost"><i class="bi bi-arrow-left"></i> {{ T.back if T.back else 'Back' }}</a>
+  </div>
+</div>
+
+<div class="card" style="overflow-x:auto;">
+  <table style="width:100%;border-collapse:collapse;table-layout:fixed;min-width:700px;">
+    <thead>
+      <tr>
+        {% for dn in ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'] %}
+        <th style="padding:6px;text-align:left;font-size:0.78em;color:#888;border-bottom:2px solid #e9ecef;">{{ dn }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for week in weeks %}
+      <tr>
+        {% for d in week %}
+        {% if d %}
+          {% set iso = d.isoformat() %}
+          {% set is_hol = iso in public_holidays %}
+          {% set is_wknd = d.weekday() >= 5 %}
+          <td style="vertical-align:top;padding:6px;height:88px;border:1px solid #f1f3f5;
+                     {% if is_hol or is_wknd %}background:#f8f9fa;{% endif %}
+                     {% if iso == today_iso %}outline:2px solid #0d6efd;outline-offset:-2px;{% endif %}">
+            <div style="font-size:0.8em;font-weight:600;color:{{ '#adb5bd' if (is_hol or is_wknd) else '#333' }};">
+              {{ d.day }}
+              {% if is_hol %}<span style="font-size:0.85em;color:#adb5bd;"> feriado</span>{% endif %}
+            </div>
+            {% for p in day_map.get(iso, []) %}
+            {% if p.status == 'approved' %}
+            <div style="background:#cfe2ff;color:#084298;border-radius:6px;padding:1px 6px;margin-top:3px;
+                        font-size:0.72em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+                 title="{{ p.name }} (#{{ p.employee_id }}) — {{ T.hol_approved if T.hol_approved else 'Approved' }}">
+              {{ p.name }}
+            </div>
+            {% else %}
+            <div style="background:#fff3cd;color:#664d03;border:1px dashed #ffc107;border-radius:6px;padding:0 5px;margin-top:3px;
+                        font-size:0.72em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+                 title="{{ p.name }} (#{{ p.employee_id }}) — {{ T.hol_pending if T.hol_pending else 'Pending' }}">
+              {{ p.name }} ?
+            </div>
+            {% endif %}
+            {% endfor %}
+          </td>
+        {% else %}
+          <td style="border:1px solid #f8f9fa;"></td>
+        {% endif %}
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div style="display:flex;gap:16px;margin-top:10px;font-size:0.78em;color:#666;">
+    <span><span style="display:inline-block;width:12px;height:12px;background:#cfe2ff;border-radius:2px;vertical-align:middle;"></span> {{ T.hol_vacation if T.hol_vacation else 'Vacaciones' }} ({{ T.hol_approved if T.hol_approved else 'Approved' }})</span>
+    <span><span style="display:inline-block;width:12px;height:12px;background:#fff3cd;border:1px dashed #ffc107;border-radius:2px;vertical-align:middle;"></span> {{ T.hol_pending if T.hol_pending else 'Pending' }}</span>
+    <span><span style="display:inline-block;width:12px;height:12px;background:#f8f9fa;border:1px solid #e9ecef;border-radius:2px;vertical-align:middle;"></span> {{ T.hol_nonworking if T.hol_nonworking else 'Non-working day' }}</span>
+  </div>
+</div>
+{% endblock %}

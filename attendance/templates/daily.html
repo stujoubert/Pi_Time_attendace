@@ -1,0 +1,106 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ T.nav_daily }}{% endblock %}
+{% block topbar_actions %}
+<a href="{{ url_for('attendance.daily_audit') }}" class="btn-sm btn-ghost"><i class="bi bi-search"></i> {{ T.nav_audit }}</a>
+<a href="{{ url_for('attendance.weekly') }}" class="btn-sm btn-ghost"><i class="bi bi-calendar-week"></i> {{ T.nav_weekly }}</a>
+{% endblock %}
+{% block head %}
+<style>
+.daily-cards { display:none; }
+@media(max-width:768px){
+  .daily-table-wrap { display:none; }
+  .daily-cards { display:block; }
+  .daily-emp-header { font-weight:600;font-size:14px;margin:12px 0 6px;padding-bottom:6px;border-bottom:2px solid var(--accent); }
+  .daily-event-card { display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:var(--surface); }
+  .daily-event-time { font-family:monospace;font-size:15px;font-weight:600;min-width:52px; }
+  .daily-event-device { font-size:11px;color:var(--muted);margin-left:auto; }
+}
+</style>
+{% endblock %}
+{% block content %}
+<div class="card">
+  <form method="get" class="filter-bar" >
+    <div>
+      <label class="form-label">{{ T.date }}</label>
+      <input type="date" name="date" value="{{ daily_date }}" class="form-control"  onchange="this.form.submit()">
+    </div>
+    <div>
+      <label class="form-label">{{ T.user }}</label>
+      <select name="user" class="form-select"  onchange="this.form.submit()">
+        <option value="">{{ T.all_users }}</option>
+        {% for u in users %}
+        <option value="{{ u.employee_id }}" {% if selected_user == u.employee_id|string %}selected{% endif %}>{{ u.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="form-label">{{ T.device_name }}</label>
+      <select name="device" class="form-select"  onchange="this.form.submit()">
+        <option value="">{{ T.all_devices }}</option>
+        {% for d in devices %}
+        <option value="{{ d['id'] }}" {% if selected_device == d['id']|string %}selected{% endif %}>{{ d['name'] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </form>
+
+  {% if on_holiday %}
+  <div style="background:#e7f1ff;border:1px solid #9ec5fe;border-radius:8px;padding:10px 14px;margin-bottom:14px;">
+    <div style="font-weight:600;margin-bottom:4px;">
+      <i class="bi bi-calendar-heart"></i> {{ T.hol_on_holiday if T.hol_on_holiday else 'On approved holiday' }}
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+      {% for h in on_holiday %}
+      <span style="background:#cfe2ff;color:#084298;padding:2px 10px;border-radius:10px;font-size:0.85em;">
+        {{ h.name }} <span style="opacity:.7;">#{{ h.employee_id }}</span>
+      </span>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if grouped %}
+  {# Desktop table #}
+  <div class="daily-table-wrap">
+  {% for emp_id, data in grouped.items() %}
+  <div style="margin-bottom:20px;">
+    <div style="font-weight:600;font-size:14px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border);">
+      {{ data.name }} <span style="color:var(--muted);font-size:12px;">({{ emp_id }})</span>
+    </div>
+    <div class="table-wrap">
+    <table class="t">
+      <thead><tr><th>{{ T.time }}</th><th>{{ T.direction }}</th><th>{{ T.device_name }}</th></tr></thead>
+      <tbody>
+        {% for ev in data.events %}
+        <tr>
+          <td class="mono">{{ ev.timestamp[11:19] }}</td>
+          <td>{% if ev.direction == 'IN' %}<span class="badge badge-green">IN</span>{% else %}<span class="badge badge-gray">OUT</span>{% endif %}</td>
+          <td style="color:var(--muted);">{{ ev.device_name or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+  {% endfor %}
+  </div>
+
+  {# Mobile cards #}
+  <div class="daily-cards">
+  {% for emp_id, data in grouped.items() %}
+    <div class="daily-emp-header">{{ data.name }} <span style="color:var(--muted);font-size:11px;">#{{ emp_id }}</span></div>
+    {% for ev in data.events %}
+    <div class="daily-event-card">
+      <span class="daily-event-time">{{ ev.timestamp[11:16] }}</span>
+      {% if ev.direction == 'IN' %}<span class="badge badge-green">IN</span>{% else %}<span class="badge badge-gray">OUT</span>{% endif %}
+      <span class="daily-event-device">{{ ev.device_name or '—' }}</span>
+    </div>
+    {% endfor %}
+  {% endfor %}
+  </div>
+
+  {% else %}
+  <div class="empty-state"><i class="bi bi-calendar-x"></i>{{ T.no_data_range }}</div>
+  {% endif %}
+</div>
+{% endblock %}

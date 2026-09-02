@@ -1,0 +1,123 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ T.nav_users }}{% endblock %}
+{% block topbar_actions %}
+<a href="{{ url_for('users.users_list', show_inactive=1 if not show_inactive else 0) }}" class="btn-sm btn-ghost">
+  {% if show_inactive %}{{ T.hide_inactive }}{% else %}{{ T.show_inactive }}{% endif %}
+</a>
+<a href="{{ url_for('users.users_add') }}" class="btn-sm btn-success"><i class="bi bi-plus"></i> {{ T.add_user }}</a>
+{% endblock %}
+{% block content %}
+<style>
+/* Mobile card layout for users */
+.user-card { display:none; }
+@media(max-width:768px){
+  .user-table-wrap { display:none; }
+  .user-card { display:block; }
+}
+.ucard {
+  background:var(--card-bg);
+  border:0.5px solid var(--border);
+  border-radius:var(--radius-lg);
+  padding:14px 16px;
+  margin-bottom:10px;
+  display:flex;
+  align-items:center;
+  gap:14px;
+}
+.ucard-avatar {
+  width:44px;height:44px;border-radius:50%;
+  background:var(--accent);display:flex;align-items:center;
+  justify-content:center;color:#fff;font-weight:600;
+  font-size:14px;flex-shrink:0;
+}
+.ucard-info { flex:1;min-width:0; }
+.ucard-name { font-weight:600;font-size:14px;color:var(--text); }
+.ucard-sub { font-size:12px;color:var(--muted);margin-top:2px; }
+.ucard-actions { display:flex;gap:6px;flex-shrink:0; }
+</style>
+
+<div class="card user-table-wrap">
+  {% if users %}
+  <div class="table-wrap">
+  <table class="t">
+    <thead><tr>
+      <th></th><th>{{ T.employee_id }}</th><th>{{ T.name }}</th>
+      <th>{{ T.department }}</th><th>{{ T.status }}</th>
+      <th>{{ T.face_count }}</th><th>{{ T.actions }}</th>
+    </tr></thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td style="width:44px;">
+          {% if u.face_count and u.face_count > 0 %}
+          <img src="/faces/img/{{ u.employee_id }}"
+               style="width:34px;height:34px;border-radius:50%;object-fit:cover;border:1.5px solid var(--border);"
+               onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"
+               loading="lazy">
+          <div style="display:none;width:34px;height:34px;border-radius:50%;background:var(--accent);align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:12px;">{{ u.name[0:2]|upper }}</div>
+          {% else %}
+          <div style="width:34px;height:34px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:12px;">{{ u.name[0:2]|upper }}</div>
+          {% endif %}
+        </td>
+        <td class="mono">{{ u.employee_id }}</td>
+        <td style="font-weight:500;">{{ u.name }}</td>
+        <td><span class="badge badge-blue">{{ u.dept }}</span></td>
+        <td>{% if u.is_active %}<span class="badge badge-green">{{ T.active }}</span>{% else %}<span class="badge badge-gray">{{ T.inactive }}</span>{% endif %}</td>
+        <td style="color:var(--muted);">{{ u.face_count }}</td>
+        <td>
+          <div style="display:flex;gap:4px;">
+            <a href="{{ url_for('users.users_edit', emp_id=u.employee_id) }}" class="btn-sm btn-ghost"><i class="bi bi-pencil"></i></a>
+            <form method="post" action="{{ url_for('users.users_toggle', emp_id=u.employee_id) }}" style="display:inline;">
+              <button class="btn-sm btn-ghost"><i class="bi bi-{% if u.is_active %}pause-circle{% else %}play-circle{% endif %}"></i></button>
+            </form>
+            <form method="post" action="{{ url_for('users.users_delete', emp_id=u.employee_id) }}" style="display:inline;" onsubmit="return confirm('{{ T.confirm_delete }}')">
+              <button class="btn-sm" style="background:transparent;border:1px solid var(--border);color:var(--danger);border-radius:7px;padding:5px 8px;cursor:pointer;"><i class="bi bi-trash"></i></button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty-state"><i class="bi bi-people"></i>{{ T.no_data_range }}</div>
+  {% endif %}
+</div>
+
+<!-- Mobile cards -->
+<div class="user-card">
+  {% for u in users %}
+  <div class="ucard">
+    <div class="ucard-avatar" style="padding:0;overflow:hidden;">
+      {% if u.face_count and u.face_count > 0 %}
+      <img src="/faces/img/{{ u.employee_id }}"
+           style="width:42px;height:42px;object-fit:cover;border-radius:50%;"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+      <span style="display:none;width:100%;height:100%;align-items:center;justify-content:center;font-weight:700;font-size:14px;">{{ u.name[0:2]|upper }}</span>
+      {% else %}
+      {{ u.name[0:2]|upper }}
+      {% endif %}
+    </div>
+    <div class="ucard-info">
+      <div class="ucard-name">{{ u.name }}</div>
+      <div class="ucard-sub">
+        <span class="mono">{{ u.employee_id }}</span> &nbsp;·&nbsp;
+        <span class="badge badge-blue" style="font-size:10px;">{{ u.dept }}</span>
+        &nbsp;·&nbsp;
+        {% if u.is_active %}<span style="color:var(--accent2);">● {{ T.active }}</span>
+        {% else %}<span style="color:var(--muted);">● {{ T.inactive }}</span>{% endif %}
+      </div>
+    </div>
+    <div class="ucard-actions">
+      <a href="{{ url_for('users.users_edit', emp_id=u.employee_id) }}" class="btn-sm btn-ghost" style="padding:8px 10px;"><i class="bi bi-pencil"></i></a>
+      <form method="post" action="{{ url_for('users.users_toggle', emp_id=u.employee_id) }}">
+        <button class="btn-sm btn-ghost" style="padding:8px 10px;"><i class="bi bi-{% if u.is_active %}pause-circle{% else %}play-circle{% endif %}"></i></button>
+      </form>
+    </div>
+  </div>
+  {% else %}
+  <div class="card"><div class="empty-state"><i class="bi bi-people"></i>{{ T.no_data_range }}</div></div>
+  {% endfor %}
+</div>
+{% endblock %}

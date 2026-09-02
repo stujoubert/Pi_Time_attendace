@@ -1,0 +1,114 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ T.nav_weekly }}{% endblock %}
+{% block topbar_actions %}
+<a href="{{ url_for('payroll.export_weekly', week_type=week_type, week=week_start) }}" class="btn-sm btn-ghost-blue"><i class="bi bi-download"></i>{{ T.weekly_excel }}</a>
+{% endblock %}
+{% block head %}
+<style>
+.weekly-cards { display:none; }
+@media(max-width:768px){
+  .weekly-table-wrap { display:none; }
+  .weekly-cards { display:block; }
+  .wcard { background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px; }
+  .wcard-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border); }
+  .wcard-name { font-weight:700;font-size:15px; }
+  .wcard-total { font-size:13px;font-weight:600;color:var(--accent);text-align:right; }
+  .wcard-row { display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px; }
+  .wcard-row:last-child { border:none;padding-bottom:0; }
+  .wcard-date { color:var(--accent);font-weight:500; }
+  .wcard-times { font-family:monospace;font-size:13px; }
+  .wcard-hours { color:var(--muted);font-size:12px;min-width:40px;text-align:right; }
+}
+</style>
+{% endblock %}
+{% block content %}
+
+<div class="card">
+  <form method="get" class="filter-bar" >
+    <div>
+      <label class="form-label">{{ T.week_type }}</label>
+      <select name="week_type" class="form-select"  onchange="this.form.submit()">
+        <option value="mon_sat" {% if week_type=='mon_sat' %}selected{% endif %}>{{ T.mon_sat }}</option>
+        <option value="mon_fri" {% if week_type=='mon_fri' %}selected{% endif %}>{{ T.mon_fri }}</option>
+        <option value="sat_fri" {% if week_type=='sat_fri' %}selected{% endif %}>{{ T.sat_fri }}</option>
+        <option value="sun_sat" {% if week_type=='sun_sat' %}selected{% endif %}>{{ T.sun_sat }}</option>
+      </select>
+    </div>
+    <div>
+      <label class="form-label">{{ T.week_prefix }}</label>
+      <select name="date" class="form-select"  onchange="this.form.submit()">
+        {% for ws, we, label in week_list %}
+        <option value="{{ ws }}" {% if ws == week_start %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="form-label">{{ T.user }}</label>
+      <select name="user" class="form-select"  onchange="this.form.submit()">
+        <option value="">{{ T.all_users }}</option>
+        {% for u in users %}
+        <option value="{{ u.employee_id }}" {% if selected_user == u.employee_id|string %}selected{% endif %}>{{ u.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </form>
+</div>
+
+{% if summary %}
+  {% for emp_id, data in summary.items() %}
+
+  {# Desktop table #}
+  <div class="card weekly-table-wrap">
+    <div class="card-header-row">
+      <div class="card-title">{{ data.name }} <span style="color:var(--muted);font-size:12px;">({{ emp_id }})</span></div>
+      <span style="font-size:13px;font-weight:600;">{{ data.total_hours }}h / {{ data.total_days }}d</span>
+    </div>
+    <div class="table-wrap">
+    <table class="t">
+      <thead><tr><th>{{ T.date }}</th><th>{{ T.first_in }}</th><th>{{ T.last_out }}</th><th>{{ T.hours }}</th><th>{{ T.punches }}</th></tr></thead>
+      <tbody>
+        {% for day_iso, rec in data.days.items() %}
+        <tr>
+          <td><a href="{{ url_for('attendance.daily_audit', date=day_iso, user=emp_id) }}" style="color:var(--accent);text-decoration:none;font-weight:500;">{{ day_iso }}</a></td>
+          {% if 'vacation' in (rec.flags or []) and rec.punches == 0 %}
+          <td colspan="4"><span style="background:#cfe2ff;color:#084298;padding:2px 10px;border-radius:10px;font-size:0.85em;font-weight:600;">{{ T.hol_vacation if T.hol_vacation else 'Vacaciones' }}</span></td>
+          {% else %}
+          <td class="mono">{{ rec.in or '—' }}{% if 'vacation' in (rec.flags or []) %} <span style="background:#cfe2ff;color:#084298;padding:1px 6px;border-radius:8px;font-size:0.75em;">{{ T.hol_vacation if T.hol_vacation else 'Vacaciones' }}</span>{% endif %}</td>
+          <td class="mono">{{ rec.out or '—' }}</td>
+          <td>{{ rec.hours }}</td>
+          <td style="color:var(--muted);">{{ rec.punches }}</td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  {# Mobile card #}
+  <div class="wcard weekly-cards">
+    <div class="wcard-header">
+      <div>
+        <div class="wcard-name">{{ data.name }}</div>
+        <div style="font-size:11px;color:var(--muted);">#{{ emp_id }}</div>
+      </div>
+      <div class="wcard-total">{{ data.total_hours }}h<br><span style="font-size:11px;color:var(--muted);">{{ data.total_days }} días</span></div>
+    </div>
+    {% for day_iso, rec in data.days.items() %}
+    <div class="wcard-row">
+      <a href="{{ url_for('attendance.daily_audit', date=day_iso, user=emp_id) }}" class="wcard-date">{{ day_iso }}</a>
+      {% if 'vacation' in (rec.flags or []) and rec.punches == 0 %}
+      <span style="background:#cfe2ff;color:#084298;padding:1px 8px;border-radius:8px;font-size:0.8em;font-weight:600;">{{ T.hol_vacation if T.hol_vacation else 'Vacaciones' }}</span>
+      {% else %}
+      <span class="wcard-times">{{ rec.in or '—' }} → {{ rec.out or '—' }}</span>
+      <span class="wcard-hours">{{ rec.hours }}h</span>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  {% endfor %}
+{% else %}
+  <div class="card"><div class="empty-state"><i class="bi bi-calendar-x"></i>{{ T.no_data_range }}</div></div>
+{% endif %}
+{% endblock %}

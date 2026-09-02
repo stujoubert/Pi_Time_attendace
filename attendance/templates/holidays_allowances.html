@@ -1,0 +1,49 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ T.hol_allowances if T.hol_allowances else 'Holiday Allowances' }}{% endblock %}
+{% block content %}
+
+<div class="card-header-row" style="margin-bottom:14px;">
+  <div class="card-title">{{ T.hol_allowances if T.hol_allowances else 'Holiday Allowances' }} — {{ year }}</div>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <a href="{{ url_for('holidays.hr_allowances', year=year-1) }}" class="btn-sm btn-ghost">← {{ year-1 }}</a>
+    <a href="{{ url_for('holidays.hr_allowances', year=year+1) }}" class="btn-sm btn-ghost">{{ year+1 }} →</a>
+    <a href="{{ url_for('holidays.hr_queue') }}" class="btn-sm btn-ghost"><i class="bi bi-arrow-left"></i> {{ T.back if T.back else 'Back' }}</a>
+  </div>
+</div>
+
+<div class="card">
+  <table style="width:100%;border-collapse:collapse;font-size:0.9em;">
+    <thead><tr style="text-align:left;border-bottom:2px solid #e9ecef;">
+      <th style="padding:8px;">{{ T.hol_employee if T.hol_employee else 'Employee' }}</th>
+      <th style="padding:8px;">{{ T.hol_employee_id if T.hol_employee_id else 'ID' }}</th>
+      <th style="padding:8px;">{{ T.hol_allowance if T.hol_allowance else 'Allowance' }}</th>
+      <th style="padding:8px;">{{ T.hol_used if T.hol_used else 'Used' }}</th>
+      <th style="padding:8px;">{{ T.hol_remaining if T.hol_remaining else 'Remaining' }}</th>
+      <th style="padding:8px;"></th>
+    </tr></thead>
+    <tbody>
+      {% for r in rows %}
+      <tr style="border-bottom:1px solid #f1f3f5;">
+        <td style="padding:8px;">{{ r.name }}</td>
+        <td style="padding:8px;color:#999;">{{ r.employee_id }}</td>
+        <td style="padding:8px;">
+          <form method="post" action="{{ url_for('holidays.hr_allowances') }}" style="display:flex;gap:6px;align-items:center;">
+            <input type="hidden" name="employee_id" value="{{ r.employee_id }}">
+            <input type="hidden" name="year" value="{{ year }}">
+            <input type="number" name="days" value="{{ r.allowance }}" min="0" max="365"
+                   class="form-control" style="width:70px;padding:4px 8px;">
+            <button class="btn-sm btn-ghost-blue" type="submit">{{ T.hol_save if T.hol_save else 'Save' }}</button>
+          </form>
+        </td>
+        <td style="padding:8px;">{{ r.used }}</td>
+        <td style="padding:8px;font-weight:600;color:{{ '#0f5132' if (r.allowance - r.used) > 0 else '#842029' }};">{{ r.allowance - r.used }}</td>
+        <td style="padding:8px;"></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if not rows %}
+  <div style="color:#888;padding:8px;">{{ T.hol_no_employees if T.hol_no_employees else 'No active employees.' }}</div>
+  {% endif %}
+</div>
+{% endblock %}

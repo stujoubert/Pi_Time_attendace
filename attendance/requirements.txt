@@ -1,0 +1,19 @@
+Flask>=2.3,<4
+Werkzeug>=2.3,<4
+requests>=2.31
+python-dateutil>=2.8
+openpyxl>=3.1
+Pillow>=10.0
+APScheduler>=3.10,<4
+python-dotenv>=1.0
+urllib3>=2.0
+# Optional: face detection on check-in selfies (piwheels has ARM builds)
+# opencv-python-headless>=4.8
+# Optional: 1:1 face verification on check-in selfies (CPU, no Coral needed).
+# Install on the Pi to enable green/amber/red match badges; absent = feature off.
+# tflite-runtime is DEAD on Python 3.11+ (no wheels). Use Google LiteRT instead:
+#   sudo pip3 install --break-system-packages "numpy<2" ai-edge-litert opencv-python-headless
+#   (numpy<2 is REQUIRED — the runtime crashes against NumPy 2.x)
+# Then drop a MobileFaceNet/FaceNet .tflite at
+#   /var/lib/attendance/models/face_embedding.tflite
+# The code auto-detects ai_edge_litert, tflite_runtime, or full tensorflow.

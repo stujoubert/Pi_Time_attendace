@@ -1,0 +1,64 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ T.advanced_schedules }}{% endblock %}
+{% block topbar_actions %}
+<a href="{{ url_for('schedules.assign_templates') }}" class="btn-sm btn-ghost-blue">
+  <i class="bi bi-people"></i> <span class="hide-xs">{{ T.assign_templates }}</span>
+</a>
+{% endblock %}
+{% block content %}
+<style>
+.hide-xs { display:inline; }
+@media(max-width:480px){ .hide-xs { display:none; } }
+.sched-create { display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end; }
+.sched-create input { flex:1;min-width:140px; }
+</style>
+
+<div class="card">
+  <div class="card-header-row">
+    <div class="card-title">{{ T.advanced_schedules }}</div>
+  </div>
+  <form method="post" action="{{ url_for('schedules.create_template') }}" style="margin-bottom:20px;">
+    <div class="sched-create">
+      <div class="form-row" style="margin:0;flex:1;min-width:140px;">
+        <label class="form-label">{{ T.template_name }}</label>
+        <input name="name" class="form-control" placeholder="{{ T.template_name }}" required>
+      </div>
+      <div class="form-row" style="margin:0;flex:1;min-width:140px;">
+        <label class="form-label">{{ T.description }}</label>
+        <input name="description" class="form-control" placeholder="{{ T.description }}">
+      </div>
+      <button class="btn-sm btn-success" type="submit" style="align-self:flex-end;white-space:nowrap;">
+        <i class="bi bi-plus"></i> {{ T.create_template }}
+      </button>
+    </div>
+  </form>
+
+  {% if templates %}
+  <div style="display:flex;flex-direction:column;gap:10px;">
+    {% for t in templates %}
+    <div style="border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;display:flex;align-items:center;gap:12px;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:600;font-size:14px;">{{ t.name }}</div>
+        {% if t.description %}
+        <div style="font-size:12px;color:var(--muted);margin-top:3px;">{{ t.description }}</div>
+        {% endif %}
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0;">
+        <a href="{{ url_for('schedules.edit_template', template_id=t.id) }}" class="btn-sm btn-ghost">
+          <i class="bi bi-pencil"></i> <span class="hide-xs">{{ T.edit }}</span>
+        </a>
+        <form method="post" action="{{ url_for('schedules.delete_template', template_id=t.id) }}"
+              style="display:inline;" onsubmit="return confirm('{{ T.confirm_delete }}')">
+          <button class="btn-sm" style="background:transparent;border:1px solid var(--border);color:var(--danger);border-radius:7px;padding:6px 10px;cursor:pointer;">
+            <i class="bi bi-trash"></i>
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state"><i class="bi bi-clock"></i>{{ T.no_templates }}</div>
+  {% endif %}
+</div>
+{% endblock %}

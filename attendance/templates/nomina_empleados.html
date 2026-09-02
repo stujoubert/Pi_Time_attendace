@@ -1,0 +1,71 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ T.nomina_emp_config_title }}{% endblock %}
+{% block topbar_actions %}
+<a href="/nomina/" class="btn-sm btn-ghost">← {{ T.nomina_title }}</a>
+{% endblock %}
+{% block content %}
+<style>
+.emp-card {
+  background:var(--card-bg);border:0.5px solid var(--border);
+  border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:10px;
+  display:flex;align-items:center;gap:14px;
+}
+.emp-avatar {
+  width:42px;height:42px;border-radius:50%;background:var(--accent2);
+  display:flex;align-items:center;justify-content:center;
+  color:#fff;font-weight:700;font-size:14px;flex-shrink:0;
+}
+.emp-info { flex:1;min-width:0; }
+.emp-name { font-weight:600;font-size:14px;color:var(--text); }
+.emp-sub { font-size:12px;color:var(--muted);margin-top:3px;display:flex;flex-wrap:wrap;gap:6px;align-items:center; }
+.emp-right { display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0; }
+</style>
+
+<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);
+            padding:10px 14px;margin-bottom:14px;font-size:13px;color:var(--muted);">
+  {{ T.nomina_emp_list_hint }}
+</div>
+
+{% for e in employees %}
+<div class="emp-card">
+  <div class="emp-avatar">{{ e.name[0:2]|upper }}</div>
+  <div class="emp-info">
+    <div class="emp-name">{{ e.name }}</div>
+    <div class="emp-sub">
+      <span class="mono" style="font-size:11px;">{{ e.employee_id }}</span>
+      <span class="badge badge-blue" style="font-size:10px;">{{ e.dept }}</span>
+      {% if e.salary_amount %}
+      <span style="color:var(--accent2);font-weight:600;">${{ "{:,.0f}".format(e.salary_amount) }}</span>
+      {% endif %}
+    </div>
+    <div class="emp-sub" style="margin-top:4px;">
+      {% if e.pay_period_type == 'quincena' %}
+      <span class="badge badge-blue" style="font-size:10px;">{{ T.nomina_quincena }}</span>
+      {% elif e.pay_period_type == 'catorcena' %}
+      <span class="badge badge-amber" style="font-size:10px;">{{ T.nomina_catorcena }}</span>
+      {% endif %}
+      {% if e.salary_type %}
+      <span style="font-size:11px;">
+        {% if e.salary_type=='daily' %}{{ T.nomina_daily }}
+        {% elif e.salary_type=='hourly' %}{{ T.nomina_hourly }}
+        {% elif e.salary_type=='monthly' %}{{ T.nomina_monthly_type }}{% endif %}
+      </span>
+      {% endif %}
+    </div>
+  </div>
+  <div class="emp-right">
+    {% if e.payroll_active %}
+    <span class="badge badge-green" style="font-size:10px;">{{ T.nomina_active }}</span>
+    {% else %}
+    <span class="badge badge-red" style="font-size:10px;">{{ T.nomina_no_config_badge }}</span>
+    {% endif %}
+    <a href="{{ url_for('nomina.empleado_config', emp_id=e.employee_id) }}"
+       class="btn-sm btn-ghost" style="padding:6px 10px;font-size:12px;">
+      <i class="bi bi-gear"></i> {{ T.configure }}
+    </a>
+  </div>
+</div>
+{% else %}
+<div class="card"><div class="empty-state"><i class="bi bi-people"></i>{{ T.no_data_range }}</div></div>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,67 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ T.assign_templates }}{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header-row">
+    <div class="card-title">{{ T.assign_templates }}</div>
+    <a href="{{ url_for('schedules.templates_page') }}" class="btn-sm btn-ghost">← {{ T.back }}</a>
+  </div>
+
+  <form method="post" action="{{ url_for('schedules.assign_templates') }}" id="assignForm">
+    <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:18px;flex-wrap:wrap;">
+      <div>
+        <label class="form-label">{{ T.select_template }}</label>
+        <select name="template_id" class="form-select" style="min-width:220px;">
+          <option value="">{{ T.no_schedule }}</option>
+          {% for t in templates %}
+          <option value="{{ t.id }}">{{ t.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button class="btn-sm btn-success" type="submit"><i class="bi bi-check-lg"></i> {{ T.apply }}</button>
+    </div>
+
+    <div class="table-wrap">
+    <table class="t">
+      <thead>
+        <tr>
+          <th style="width:40px;"><input type="checkbox" id="selAll"></th>
+          <th>{{ T.employee_id }}</th>
+          <th>{{ T.name }}</th>
+          <th>{{ T.current_schedule }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td><input type="checkbox" class="user-cb" name="employee_ids" value="{{ u.employee_id }}"></td>
+          <td class="mono">{{ u.employee_id }}</td>
+          <td>{{ u.name }}</td>
+          <td>
+            {% if u.current_template %}
+            <span class="badge badge-blue">{{ u.current_template }}</span>
+            {% else %}
+            <span class="badge badge-gray">{{ T.no_schedule }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </form>
+</div>
+
+<script>
+const selAll = document.getElementById('selAll');
+selAll.addEventListener('change', () => {
+  document.querySelectorAll('.user-cb').forEach(cb => cb.checked = selAll.checked);
+});
+document.getElementById('assignForm').addEventListener('submit', e => {
+  if (!document.querySelector('.user-cb:checked')) {
+    e.preventDefault();
+    alert('{{ T.get("select_at_least_one_user", "Please select at least one user.") }}');
+  }
+});
+</script>
+{% endblock %}

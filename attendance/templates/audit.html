@@ -1,0 +1,90 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ T.nav_audit }}{% endblock %}
+{% block topbar_actions %}
+<a href="{{ url_for('attendance.audit_export', date=selected_date, user=selected_user or '') }}" class="btn-sm btn-ghost-blue"><i class="bi bi-filetype-csv"></i> {{ T.export_csv }}</a>
+{% endblock %}
+{% block head %}
+<style>
+.audit-cards { display:none; }
+@media(max-width:768px){
+  .audit-table-wrap { display:none; }
+  .audit-cards { display:block; }
+  .acard-row { display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:var(--surface); }
+  .acard-time { font-family:monospace;font-size:14px;font-weight:600;min-width:64px; }
+  .acard-device { font-size:11px;color:var(--muted);margin-left:auto;text-align:right; }
+}
+</style>
+{% endblock %}
+{% block content %}
+<div class="card">
+  <form method="get" class="filter-bar" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:0;">
+    <div>
+      <label class="form-label">{{ T.date }}</label>
+      <input type="date" name="date" value="{{ selected_date }}" class="form-control"  onchange="this.form.submit()">
+    </div>
+    <div>
+      <label class="form-label">{{ T.user }}</label>
+      <select name="user" class="form-select"  onchange="this.form.submit()">
+        <option value="">{{ T.all_users }}</option>
+        {% for u in users %}
+        <option value="{{ u.employee_id }}" {% if selected_user == u.employee_id|string %}selected{% endif %}>{{ u.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="form-label">{{ T.device_name }}</label>
+      <select name="device" class="form-select"  onchange="this.form.submit()">
+        <option value="">{{ T.all_devices }}</option>
+        {% for d in devices %}
+        <option value="{{ d['id'] }}" {% if selected_device == d['id']|string %}selected{% endif %}>{{ d['name'] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </form>
+  <p style="color:var(--muted);font-size:12px;margin-top:12px;margin-bottom:0;">
+    {{ T.audit_note }} {{ T.duplicate_note }}
+  </p>
+</div>
+
+{% if grouped %}
+  {% for emp_id, data in grouped.items() %}
+  <div class="card">
+    <div class="card-header-row">
+      <div class="card-title">{{ data.name }} <span style="color:var(--muted);font-size:12px;">({{ emp_id }})</span></div>
+      <span style="color:var(--muted);font-size:12px;">{{ data.events|length }} events</span>
+    </div>
+    <div class="audit-table-wrap"><div class="table-wrap">
+    <table class="t">
+      <thead><tr><th>{{ T.time }}</th><th>{{ T.direction }}</th><th>{{ T.device_name }}</th><th>Note</th></tr></thead>
+      <tbody>
+        {% for ev in data.events %}
+        <tr style="{% if ev.duplicate %}background:#FEF2F2;{% endif %}">
+          <td class="mono">{{ ev.timestamp[11:19] if ev.timestamp else '—' }}</td>
+          <td>
+            {% if ev.direction == 'IN' %}<span class="badge badge-green">IN</span>
+            {% else %}<span class="badge badge-gray">OUT</span>{% endif %}
+          </td>
+          <td style="color:var(--muted);font-size:12px;">{{ ev.device_name or '—' }}</td>
+          <td>{% if ev.duplicate %}<span class="badge badge-red">{{ T.duplicate }}</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div></div>
+    <!-- Mobile cards -->
+    <div class="audit-cards">
+    {% for ev in data.events %}
+    <div class="acard-row {% if ev.duplicate %}style="background:#FEF2F2;"{% endif %}">
+      <span class="acard-time">{{ ev.timestamp[11:16] if ev.timestamp else '—' }}</span>
+      {% if ev.direction == 'IN' %}<span class="badge badge-green">IN</span>{% else %}<span class="badge badge-gray">OUT</span>{% endif %}
+      {% if ev.duplicate %}<span class="badge badge-red">dup</span>{% endif %}
+      <span class="acard-device">{{ ev.device_name or '—' }}</span>
+    </div>
+    {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="card"><div class="empty-state"><i class="bi bi-search"></i>{{ T.no_data_range }}</div></div>
+{% endif %}
+{% endblock %}

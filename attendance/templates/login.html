@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="{{ current_lang }}">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ T.login_title }} — {{ T.app_title }}</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:#0F1117;min-height:100vh;
+     display:flex;align-items:center;justify-content:center;padding:20px;}
+.card{background:#1A1D26;border:1px solid rgba(255,255,255,.08);border-radius:16px;
+      padding:40px;width:100%;max-width:380px;}
+.brand{text-align:center;margin-bottom:32px;}
+.brand-icon{width:48px;height:48px;border-radius:12px;background:#3B82F6;
+            display:inline-flex;align-items:center;justify-content:center;
+            color:#fff;font-size:22px;margin-bottom:12px;}
+.brand-name{color:#fff;font-size:20px;font-weight:600;}
+.brand-sub{color:#6B7280;font-size:13px;margin-top:2px;}
+h1{color:#fff;font-size:18px;font-weight:600;margin-bottom:24px;}
+.form-label{display:block;font-size:12px;font-weight:500;color:#9CA3AF;margin-bottom:5px;}
+.form-control{width:100%;background:#0F1117;border:1px solid rgba(255,255,255,.1);
+              border-radius:9px;padding:10px 14px;color:#fff;font-size:14px;
+              font-family:inherit;outline:none;transition:border-color .15s;}
+.form-control:focus{border-color:#3B82F6;box-shadow:0 0 0 3px rgba(59,130,246,.15);}
+.form-row{margin-bottom:18px;}
+.btn{width:100%;background:#3B82F6;color:#fff;border:none;border-radius:9px;
+     padding:11px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;
+     margin-top:8px;transition:background .15s;}
+.btn:hover{background:#2563EB;}
+.alert{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);
+       color:#FCA5A5;border-radius:9px;padding:10px 14px;font-size:13px;margin-bottom:18px;}
+.lang{text-align:center;margin-top:20px;font-size:12px;}
+.lang a{color:#6B7280;text-decoration:none;margin:0 6px;}
+.lang a:hover{color:#9CA3AF;}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="brand">
+    <div class="brand-icon"><i class="bi bi-fingerprint"></i></div>
+    <div class="brand-name">{{ T.app_title }}</div>
+    <div class="brand-sub">Attendance Management</div>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}{% for cat, msg in messages %}
+      <div class="alert">{{ msg }}</div>
+    {% endfor %}{% endif %}
+  {% endwith %}
+
+  <form method="post" autocomplete="off">
+    <div class="form-row">
+      <label class="form-label">{{ T.username }}</label>
+      <input class="form-control" name="username" required autofocus
+             autocapitalize="none" autocomplete="username">
+    </div>
+    <div class="form-row">
+      <label class="form-label">{{ T.password }}</label>
+      <input class="form-control" type="password" name="password" required
+             autocomplete="current-password">
+    </div>
+    <button class="btn" type="submit">{{ T.login }}</button>
+  </form>
+
+  <div class="lang">
+    <a href="?lang=en">English</a> · <a href="?lang=es">Español</a>
+  </div>
+</div>
+</body>
+</html>

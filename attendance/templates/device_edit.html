@@ -1,0 +1,38 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ T.edit }} Device{% endblock %}
+{% block content %}
+<div class="card" style="max-width:640px;">
+  <div class="card-header-row">
+    <div class="card-title">{{ T.edit }} — {{ device.name }}</div>
+    <a href="{{ url_for('devices.devices_page') }}" class="btn-sm btn-ghost">← {{ T.back }}</a>
+  </div>
+  <form method="post" action="{{ url_for('devices.device_edit', device_id=device.id) }}">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+      <div class="form-row">
+        <label class="form-label">{{ T.name }}</label>
+        <input name="name" class="form-control" value="{{ device.name }}" required>
+      </div>
+      <div class="form-row">
+        <label class="form-label">{{ T.ip_address }}</label>
+        <input name="ip" class="form-control" value="{{ device.ip }}" required>
+      </div>
+      <div class="form-row">
+        <label class="form-label">{{ T.username }}</label>
+        <input name="username" class="form-control" value="{{ device.username or '' }}">
+      </div>
+      <div class="form-row">
+        <label class="form-label">{{ T.password }} <span style="color:var(--muted);font-size:11px;">(leave blank to keep current)</span></label>
+        <input type="password" name="password" class="form-control">
+      </div>
+      <div class="form-row">
+        <label class="form-label">{{ T.status }}</label>
+        <select name="active" class="form-select">
+          <option value="1" {% if device.active %}selected{% endif %}>{{ T.active }}</option>
+          <option value="0" {% if not device.active %}selected{% endif %}>{{ T.inactive }}</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn-sm btn-success" type="submit"><i class="bi bi-check-lg"></i> {{ T.save }}</button>
+  </form>
+</div>
+{% endblock %}

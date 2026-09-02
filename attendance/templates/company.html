@@ -1,0 +1,91 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ T.company_settings }}{% endblock %}
+{% block head %}
+<style>
+.company-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; max-width:1000px; }
+@media(max-width:768px){
+  .company-grid { grid-template-columns:1fr !important; }
+}
+</style>
+{% endblock %}
+{% block content %}
+<div class="company-grid">
+
+  <!-- Company info -->
+  <div class="card" style="margin-bottom:0;">
+    <div class="card-title" style="margin-bottom:16px;"><i class="bi bi-building" style="color:var(--accent)"></i> {{ T.company_settings }}</div>
+    <form method="post" action="{{ url_for('company.company_settings') }}" enctype="multipart/form-data">
+      <div class="form-row">
+        <label class="form-label">{{ T.company_name }}</label>
+        <input name="name" class="form-control" value="{{ data.name or '' }}" required>
+      </div>
+      <div class="form-row">
+        <label class="form-label">{{ T.company_rfc }}</label>
+        <input name="rfc" class="form-control" value="{{ data.rfc or '' }}">
+      </div>
+      <div class="form-row">
+        <label class="form-label">{{ T.company_logo }}</label>
+        {% if data.logo_url %}
+        <div style="margin-bottom:8px;"><img src="{{ data.logo_url }}" style="max-height:60px;border-radius:6px;border:1px solid var(--border);"></div>
+        {% endif %}
+        <input type="file" name="logo" accept="image/*" class="form-control">
+      </div>
+      <div class="form-row">
+        <label class="form-label">{{ T.work_start_time }}</label>
+        <input type="time" name="work_start_time" class="form-control" value="{{ smtp.get('work_start_time','08:00') }}">
+      </div>
+      <div class="form-row">
+        <label class="form-label">{{ T.work_end_time }}</label>
+        <input type="time" name="work_end_time" class="form-control" value="{{ smtp.get('work_end_time','17:00') }}">
+      </div>
+      <div class="form-row">
+        <label class="form-label">{{ T.week_type }}</label>
+        <select name="week_type" class="form-select">
+          {% for val, label in [('mon_sat', T.mon_sat), ('mon_fri', T.mon_fri), ('sat_fri', T.sat_fri), ('sun_sat', T.sun_sat)] %}
+          <option value="{{ val }}" {% if smtp.get('week_type') == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-row">
+        <label class="form-label">{{ T.tz_offset }} <span style="color:var(--muted);font-size:11px;">(e.g. -06:00)</span></label>
+        <input name="tz_offset" class="form-control" value="{{ smtp.get('tz_offset','-06:00') }}">
+      </div>
+      <button class="btn-sm btn-success" type="submit"><i class="bi bi-check-lg"></i> {{ T.save_changes }}</button>
+    </form>
+  </div>
+
+  <!-- SMTP settings -->
+  <div class="card" style="margin-bottom:0;">
+    <div class="card-title" style="margin-bottom:16px;"><i class="bi bi-envelope" style="color:var(--accent2)"></i> {{ T.smtp_settings }}</div>
+    <form method="post" action="{{ url_for('company.company_settings') }}" enctype="multipart/form-data">
+      <!-- hidden company fields to avoid overwriting -->
+      <input type="hidden" name="name" value="{{ data.name or '' }}">
+      <input type="hidden" name="rfc" value="{{ data.rfc or '' }}">
+      <div class="form-row">
+        <label class="form-label">{{ T.smtp_sender }}</label>
+        <input type="email" name="smtp_sender" class="form-control" value="{{ smtp.get('smtp_sender','') }}">
+      </div>
+      <div class="form-row">
+        <label class="form-label">{{ T.smtp_host }}</label>
+        <input name="smtp_host" class="form-control" value="{{ smtp.get('smtp_host','smtp.gmail.com') }}">
+      </div>
+      <div class="form-row">
+        <label class="form-label">{{ T.smtp_port }}</label>
+        <input type="number" name="smtp_port" class="form-control" value="{{ smtp.get('smtp_port','587') }}">
+      </div>
+      <div class="form-row">
+        <label class="form-label">{{ T.smtp_password }} <span style="color:var(--muted);font-size:11px;">(leave blank to keep)</span></label>
+        <input type="password" name="smtp_pass" class="form-control" autocomplete="new-password">
+      </div>
+      <div class="form-row">
+        <label class="form-label">{{ T.report_recipient }}</label>
+        <input type="email" name="report_recipient" class="form-control" value="{{ smtp.get('report_recipient','') }}">
+      </div>
+      <div style="background:var(--bg);border-radius:8px;padding:12px;margin-bottom:14px;font-size:12px;color:var(--muted);">
+        <i class="bi bi-info-circle"></i> Weekly reports are sent automatically every Monday at 06:00.
+      </div>
+      <button class="btn-sm btn-success" type="submit"><i class="bi bi-check-lg"></i> {{ T.save_changes }}</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

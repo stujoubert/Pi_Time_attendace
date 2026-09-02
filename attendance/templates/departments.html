@@ -1,0 +1,118 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ T.nav_departments }}{% endblock %}
+{% block head %}
+<style>
+/* Desktop table */
+.dept-table-wrap { display:block; }
+.dept-cards { display:none; }
+
+@media(max-width:768px){
+  /* Hide table, show cards */
+  .dept-table-wrap { display:none; }
+  .dept-cards { display:block; }
+
+  /* Add form — stack vertically */
+  .dept-add-form { flex-direction:column !important; }
+  .dept-add-form input { max-width:100% !important; width:100% !important; }
+  .dept-add-form button { width:100%; }
+
+  /* Department cards */
+  .dept-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:8px; }
+  .dept-card-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .dept-card-name { font-weight:600; font-size:15px; }
+  .dept-card-badge { }
+  .dept-edit-form { display:flex; gap:6px; align-items:center; }
+  .dept-edit-form input { flex:1; min-width:0; font-size:14px; padding:6px 8px; }
+  .dept-actions { display:flex; gap:6px; margin-top:8px; }
+  .dept-actions button, .dept-actions .btn-sm { flex:1; text-align:center; justify-content:center; }
+}
+</style>
+{% endblock %}
+{% block content %}
+<div class="card" style="max-width:720px;">
+  <div class="card-header-row">
+    <div class="card-title">{{ T.nav_departments }}</div>
+  </div>
+
+  <form method="post" action="{{ url_for('departments.create_department') }}"
+        class="dept-add-form" style="display:flex;gap:8px;margin-bottom:20px;">
+    <input name="name" class="form-control" placeholder="{{ T.add_department }}" required style="max-width:280px;">
+    <button class="btn-sm btn-success" type="submit"><i class="bi bi-plus"></i> {{ T.add }}</button>
+  </form>
+
+  {% if departments %}
+
+  {# Desktop table #}
+  <div class="dept-table-wrap">
+  <table class="t">
+    <thead><tr><th>ID</th><th>{{ T.name }}</th><th>Users</th><th>Status</th><th>{{ T.actions }}</th></tr></thead>
+    <tbody>
+      {% for d in departments %}
+      <tr>
+        <td class="mono" style="width:60px;">{{ d.id }}</td>
+        <td style="font-weight:500;">{{ d.name }}</td>
+        <td><span class="badge badge-blue">{{ d.user_count }}</span></td>
+        <td>{% if d.hidden %}<span class="badge badge-gray">Hidden</span>{% else %}<span class="badge badge-green">Visible</span>{% endif %}</td>
+        <td>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <form method="post" action="{{ url_for('departments.edit_department', dept_id=d.id) }}" style="display:flex;gap:6px;">
+              <input name="name" class="form-control" value="{{ d.name }}" style="max-width:180px;padding:4px 8px;font-size:12px;">
+              <button class="btn-sm btn-ghost" type="submit"><i class="bi bi-check"></i></button>
+            </form>
+            <form method="post" action="/departments/{{ d.id }}/toggle-hidden" style="display:inline;">
+              <button class="btn-sm btn-ghost" type="submit"
+                title="{{ 'Make visible' if d.hidden else 'Hide from non-admins' }}"
+                style="color:{{ 'var(--muted)' if d.hidden else 'var(--text)' }};">
+                <i class="bi bi-{{ 'eye' if d.hidden else 'eye-slash' }}"></i>
+              </button>
+            </form>
+            <form method="post" action="{{ url_for('departments.delete_department', dept_id=d.id) }}" onsubmit="return confirm('{{ T.confirm_delete }}')">
+              <button class="btn-sm" style="background:transparent;border:1px solid var(--border);color:var(--danger);border-radius:7px;padding:5px 8px;cursor:pointer;"
+                {% if d.user_count > 0 %}disabled title="Has users"{% endif %}>
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  {# Mobile cards #}
+  <div class="dept-cards">
+  {% for d in departments %}
+  <div class="dept-card">
+    <div class="dept-card-header">
+      <span class="dept-card-name">{{ d.name }}</span>
+      <span class="badge badge-blue">{{ d.user_count }} users</span>
+    </div>
+    <div class="dept-edit-form">
+      <form method="post" action="{{ url_for('departments.edit_department', dept_id=d.id) }}" style="display:flex;gap:6px;flex:1;">
+        <input name="name" class="form-control" value="{{ d.name }}">
+        <button class="btn-sm btn-ghost" type="submit"><i class="bi bi-check-lg"></i></button>
+      </form>
+      <form method="post" action="/departments/{{ d.id }}/toggle-hidden" style="display:inline;">
+              <button class="btn-sm btn-ghost" type="submit"
+                title="{{ 'Make visible' if d.hidden else 'Hide from non-admins' }}"
+                style="color:{{ 'var(--muted)' if d.hidden else 'var(--text)' }};">
+                <i class="bi bi-{{ 'eye' if d.hidden else 'eye-slash' }}"></i>
+              </button>
+            </form>
+            <form method="post" action="{{ url_for('departments.delete_department', dept_id=d.id) }}" onsubmit="return confirm('{{ T.confirm_delete }}')">
+        <button class="btn-sm" style="background:transparent;border:1px solid var(--border);color:var(--danger);border-radius:7px;padding:6px 10px;cursor:pointer;"
+          {% if d.user_count > 0 %}disabled{% endif %}>
+          <i class="bi bi-trash"></i>
+        </button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+  </div>
+
+  {% else %}
+  <div class="empty-state"><i class="bi bi-diagram-3"></i>No departments yet</div>
+  {% endif %}
+</div>
+{% endblock %}

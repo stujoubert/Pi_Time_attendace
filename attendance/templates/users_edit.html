@@ -1,0 +1,43 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ T.edit_user or 'Edit User' }}{% endblock %}
+{% block content %}
+<div class="card" style="max-width:640px;">
+  <div class="card-header-row">
+    <div class="card-title">{{ T.edit_user or 'Edit User' }} — {{ user.employee_id }}</div>
+    <a href="{{ url_for('users.users_list') }}" class="btn-sm btn-ghost">← {{ T.back }}</a>
+  </div>
+  <form method="post" action="{{ url_for('users.users_edit', emp_id=user.employee_id) }}">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+      <div class="form-row">
+        <label class="form-label">{{ T.employee_id }}</label>
+        <input class="form-control" value="{{ user.employee_id }}" disabled>
+      </div>
+      <div class="form-row">
+        <label class="form-label">{{ T.name }}</label>
+        <input name="name" class="form-control" value="{{ user.name }}" required>
+      </div>
+      <div class="form-row">
+        <label class="form-label">{{ T.department }}</label>
+        <select name="department_id" class="form-select">
+          <option value="">{{ T.no_department }}</option>
+          {% for d in depts %}
+          <option value="{{ d.id }}" {% if user.department_id == d.id %}selected{% endif %}>{{ d.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="form-row" style="margin-bottom:12px;">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+        <input type="checkbox" name="requires_production" value="1"
+               {% if user.requires_production %}checked{% endif %}
+               style="width:18px;height:18px;">
+        {{ T.usr_requires_production if T.usr_requires_production else 'Requires production floor check-in (two-stage)' }}
+      </label>
+      <div style="font-size:0.78em;color:#888;margin-top:4px;">
+        {{ T.usr_requires_production_help if T.usr_requires_production_help else 'When on, this employee\'s paid time starts at their production-floor punch, not the entrance gate. The entrance punch is still recorded.' }}
+      </div>
+    </div>
+    <button class="btn-sm btn-success" type="submit"><i class="bi bi-check-lg"></i> {{ T.save }}</button>
+  </form>
+</div>
+{% endblock %}

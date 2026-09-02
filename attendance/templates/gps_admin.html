@@ -1,0 +1,258 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ T.gps_admin_title if T.gps_admin_title else 'GPS Check-in' }}{% endblock %}
+{% block content %}
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+.gps-admin-grid { display:grid; grid-template-columns:380px 1fr; gap:18px; align-items:start; }
+.gps-table-wrap { overflow-x:auto; }
+/* Leaflet panes are absolutely positioned; the container must establish a
+   positioning context and clip, or on mobile the tiles float over the page. */
+#gps-map { position:relative; width:100%; max-width:100%; height:480px;
+           border-radius:8px; overflow:hidden; z-index:0; }
+.leaflet-container { max-width:100%; }
+@media (max-width: 820px) {
+  .gps-admin-grid { grid-template-columns: 1fr; }
+  #gps-map { height: 320px; }
+}
+</style>
+
+<div class="gps-admin-grid">
+  <div>
+    <div class="card" style="margin-bottom:18px;">
+      <div class="card-title" style="margin-bottom:10px;">{{ T.gps_new_site if T.gps_new_site else 'New site' }}</div>
+      <p style="font-size:0.8em;color:#666;margin-bottom:10px;">
+        {{ T.gps_click_map if T.gps_click_map else 'Click on the map to set the coordinates.' }}
+      </p>
+      <form method="post" action="{{ url_for('gps.site_create') }}">
+        <div class="form-row" style="margin-bottom:8px;">
+          <label class="form-label">{{ T.name if T.name else 'Name' }}</label>
+          <input name="name" class="form-control" required placeholder="Oficina Centro">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div class="form-row">
+            <label class="form-label">Lat</label>
+            <input name="lat" id="site-lat" class="form-control" required step="any" type="number">
+          </div>
+          <div class="form-row">
+            <label class="form-label">Lng</label>
+            <input name="lng" id="site-lng" class="form-control" required step="any" type="number">
+          </div>
+        </div>
+        <div class="form-row" style="margin-bottom:10px;">
+          <label class="form-label">{{ T.gps_radius if T.gps_radius else 'Radius (m)' }}</label>
+          <input name="radius_m" id="site-radius" class="form-control" type="number" value="150" min="20" max="2000">
+        </div>
+        <button class="btn-sm btn-success" type="submit" style="width:100%;">
+          <i class="bi bi-plus"></i> {{ T.create if T.create else 'Create' }}
+        </button>
+      </form>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="margin-bottom:10px;">{{ T.gps_sites if T.gps_sites else 'Sites' }}</div>
+      {% for s in sites %}
+      <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #f1f3f5;padding:6px 0;">
+        <div>
+          <strong>{{ s.name }}</strong>
+          <span style="color:#999;font-size:0.8em;">{{ s.radius_m }} m</span>
+          {% if not s.active %}<span style="background:#e9ecef;color:#666;padding:0 6px;border-radius:8px;font-size:0.75em;">OFF</span>{% endif %}
+        </div>
+        <div style="display:flex;gap:6px;">
+          <form method="post" action="{{ url_for('gps.site_toggle', site_id=s.id) }}"><button class="btn-sm btn-ghost" type="submit">{{ 'Off' if s.active else 'On' }}</button></form>
+          <form method="post" action="{{ url_for('gps.site_delete', site_id=s.id) }}"
+                onsubmit="return confirm('Delete site {{ s.name }}?');">
+            <button class="btn-sm btn-ghost" type="submit"><i class="bi bi-trash"></i></button>
+          </form>
+        </div>
+      </div>
+      {% else %}
+      <div style="color:#888;font-size:0.9em;">{{ T.gps_no_sites_yet if T.gps_no_sites_yet else 'No sites yet — click the map and create one.' }}</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title" style="margin-bottom:10px;">{{ T.gps_map if T.gps_map else 'Map' }}</div>
+    <div id="gps-map"></div>
+    <div style="display:flex;gap:16px;margin-top:8px;font-size:0.78em;color:#666;">
+      <span><span style="display:inline-block;width:12px;height:12px;background:#0f5132;border-radius:50%;vertical-align:middle;"></span> {{ T.gps_accepted if T.gps_accepted else 'Accepted' }}</span>
+      <span><span style="display:inline-block;width:12px;height:12px;background:#fd7e14;border-radius:50%;vertical-align:middle;"></span> {{ T.gps_out_of_zone if T.gps_out_of_zone else 'Fuera de zona' }}</span>
+      <span><span style="display:inline-block;width:12px;height:12px;background:#dc3545;border-radius:50%;vertical-align:middle;"></span> {{ T.gps_rejected if T.gps_rejected else 'Rejected' }}</span>
+      <span><span style="display:inline-block;width:12px;height:12px;background:#0d6efd33;border:1px solid #0d6efd;border-radius:50%;vertical-align:middle;"></span> {{ T.gps_geofence if T.gps_geofence else 'Geofence' }}</span>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:18px;">
+  <div class="card-title" style="margin-bottom:10px;">{{ T.gps_recent if T.gps_recent else 'Recent check-ins' }}</div>
+  {% if checkins %}
+  <div class="gps-table-wrap">
+  <table style="width:100%;border-collapse:collapse;font-size:0.85em;min-width:640px;">
+    <thead><tr style="text-align:left;border-bottom:2px solid #e9ecef;">
+      <th style="padding:6px 8px;">{{ T.gps_when if T.gps_when else 'When' }}</th>
+      <th style="padding:6px 8px;">{{ T.hol_employee if T.hol_employee else 'Employee' }}</th>
+      <th style="padding:6px 8px;">{{ T.gps_dir if T.gps_dir else 'Type' }}</th>
+      <th style="padding:6px 8px;">{{ T.gps_site if T.gps_site else 'Site' }}</th>
+      <th style="padding:6px 8px;">{{ T.gps_distance if T.gps_distance else 'Distance' }}</th>
+      <th style="padding:6px 8px;">{{ T.gps_accuracy if T.gps_accuracy else 'Accuracy' }}</th>
+      <th style="padding:6px 8px;">{{ T.gps_result if T.gps_result else 'Result' }}</th>
+      <th style="padding:6px 8px;">{{ T.gps_photo if T.gps_photo else 'Photo' }}</th>
+    </tr></thead>
+    <tbody>
+      {% for c in checkins %}
+      <tr style="border-bottom:1px solid #f1f3f5;">
+        <td style="padding:6px 8px;">{{ c.timestamp[:16] }}</td>
+        <td style="padding:6px 8px;">{{ c.emp_name }} <span style="color:#999;font-size:0.85em;">#{{ c.employee_id }}</span>
+          {% if c.recorded_by %}<br><span style="font-size:0.75em;color:#0d6efd;"><i class="bi bi-person-badge"></i> {{ T.gps_by if T.gps_by else 'by' }} {{ c.recorded_by }}</span>{% endif %}
+        </td>
+        <td style="padding:6px 8px;font-weight:600;color:{{ '#0f5132' if c.direction=='IN' else '#842029' }};">{{ c.direction }}</td>
+        <td style="padding:6px 8px;">{{ c.site_name or '—' }}</td>
+        <td style="padding:6px 8px;">{{ c.distance_m|int if c.distance_m is not none else '—' }} m</td>
+        <td style="padding:6px 8px;color:#999;">±{{ c.accuracy_m|int if c.accuracy_m is not none else '?' }} m</td>
+        <td style="padding:6px 8px;">
+          {% if c.accepted and c.within_fence %}
+          <span style="background:#d1e7dd;color:#0f5132;padding:1px 8px;border-radius:8px;font-size:0.85em;font-weight:600;">OK</span>
+          {% elif c.accepted and c.lat is none %}
+          <span style="background:#e9ecef;color:#666;padding:1px 8px;border-radius:8px;font-size:0.85em;font-weight:600;">{{ T.gps_no_location if T.gps_no_location else 'SIN GPS' }}</span>
+          {% elif c.accepted %}
+          <span style="background:#fff3cd;color:#664d03;padding:1px 8px;border-radius:8px;font-size:0.85em;font-weight:600;">{{ T.gps_out_of_zone if T.gps_out_of_zone else 'FUERA DE ZONA' }}</span>
+          {% else %}
+          <span style="background:#f8d7da;color:#842029;padding:1px 8px;border-radius:8px;font-size:0.85em;font-weight:600;">{{ T.gps_rejected if T.gps_rejected else 'Rejected' }}</span>
+          {% endif %}
+        </td>
+        <td style="padding:6px 8px;">
+          {% if c.photo_path %}
+          <div style="display:flex;align-items:center;gap:6px;">
+          <img src="{{ url_for('gps.checkin_photo', chk_id=c.id) }}"
+               style="height:34px;width:34px;object-fit:cover;border-radius:6px;cursor:pointer;
+                      border:2px solid {{ '#0f5132' if c.has_face else ('#e9ecef' if c.has_face is none else '#dc3545') }};"
+               title="{{ 'Face detected' if c.has_face else ('No face detected!' if c.has_face is not none else '') }}"
+               onclick="showCompare({{ c.id }}, '{{ c.employee_id }}', '{{ c.emp_name|e }}')">
+          {% if c.match_score is not none %}
+            {% if c.match_score >= 0.65 %}
+              {% set mcol = '#0f5132' %}{% set mbg = '#d1e7dd' %}{% set mlbl = T.fm_match if T.fm_match else 'MATCH' %}
+            {% elif c.match_score >= 0.45 %}
+              {% set mcol = '#664d03' %}{% set mbg = '#fff3cd' %}{% set mlbl = T.fm_review if T.fm_review else 'REVIEW' %}
+            {% else %}
+              {% set mcol = '#842029' %}{% set mbg = '#f8d7da' %}{% set mlbl = T.fm_mismatch if T.fm_mismatch else 'MISMATCH' %}
+            {% endif %}
+            <span title="{{ T.fm_similarity if T.fm_similarity else 'Face similarity' }}: {{ (c.match_score * 100)|round(0)|int }}%"
+                  style="background:{{ mbg }};color:{{ mcol }};padding:1px 6px;border-radius:8px;font-size:0.72em;font-weight:600;white-space:nowrap;">
+              {{ mlbl }} {{ (c.match_score * 100)|round(0)|int }}%
+            </span>
+          {% endif %}
+          </div>
+          {% else %}
+          <span style="color:#ccc;"><i class="bi bi-camera-video-off"></i></span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div style="color:#888;">{{ T.gps_no_checkins if T.gps_no_checkins else 'No check-ins yet.' }}</div>
+  {% endif %}
+</div>
+
+{# Side-by-side comparison modal: check-in selfie vs enrolled face #}
+<div id="compare-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;
+     align-items:center;justify-content:center;" onclick="this.style.display='none'">
+  <div style="background:#fff;border-radius:12px;padding:18px;max-width:640px;width:92%;" onclick="event.stopPropagation()">
+    <div style="font-weight:600;margin-bottom:10px;" id="compare-title"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div>
+        <div style="font-size:0.8em;color:#666;margin-bottom:4px;">{{ T.gps_selfie if T.gps_selfie else 'Check-in selfie' }}</div>
+        <img id="compare-selfie" style="width:100%;border-radius:8px;">
+      </div>
+      <div>
+        <div style="font-size:0.8em;color:#666;margin-bottom:4px;">{{ T.gps_enrolled if T.gps_enrolled else 'Enrolled photo' }}</div>
+        <img id="compare-enrolled" style="width:100%;border-radius:8px;"
+             onerror="this.alt='{{ T.gps_no_enrolled if T.gps_no_enrolled else 'No enrolled photo' }}';this.style.opacity=.3;">
+      </div>
+    </div>
+    <div style="text-align:right;margin-top:12px;">
+      <button class="btn-sm btn-ghost" onclick="document.getElementById('compare-modal').style.display='none'">Cerrar</button>
+    </div>
+  </div>
+</div>
+<script>
+function showCompare(chkId, empId, empName){
+  document.getElementById('compare-title').textContent = empName + ' (#' + empId + ')';
+  document.getElementById('compare-selfie').src = '/gps/photo/' + chkId;
+  var en = document.getElementById('compare-enrolled');
+  en.style.opacity = 1;
+  en.src = '/gps/enrolled/' + empId;
+  document.getElementById('compare-modal').style.display = 'flex';
+}
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+var SITES = {{ sites_json | tojson }};
+var CHECKINS = {{ checkins_json | tojson }};
+
+var map = L.map('gps-map');
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            {maxZoom: 19, attribution: '&copy; OpenStreetMap'}).addTo(map);
+
+var bounds = [];
+SITES.forEach(function(s){
+  var circle = L.circle([s.lat, s.lng], {radius: s.radius_m, color:'#0d6efd',
+                        fillColor:'#0d6efd', fillOpacity:0.15,
+                        dashArray: s.active ? null : '6'}).addTo(map);
+  circle.bindPopup('<b>'+s.name+'</b><br>'+s.radius_m+' m'+(s.active?'':' (OFF)'));
+  bounds.push([s.lat, s.lng]);
+});
+CHECKINS.forEach(function(c){
+  if(c.lat == null || c.lng == null) return;
+  var col = !c.accepted ? '#dc3545' : (c.within_fence ? '#0f5132' : '#fd7e14');
+  L.circleMarker([c.lat, c.lng], {radius:6,
+      color: col, fillColor: col, fillOpacity:0.85})
+   .addTo(map)
+   .bindPopup('<b>'+c.emp_name+'</b> '+c.direction+'<br>'+c.timestamp+
+              '<br>'+(c.site_name||'')+' '+(c.distance_m!=null?Math.round(c.distance_m)+' m':''));
+  bounds.push([c.lat, c.lng]);
+});
+if(bounds.length){ map.fitBounds(bounds, {padding:[30,30], maxZoom:16}); }
+else { map.setView([20.5888, -100.3899], 12); }  // Querétaro default
+
+// Leaflet measures the container at init; if the layout is still settling
+// (mobile, web fonts, sidebar) the panes can mis-size and overflow. Recompute
+// once everything has painted, and again on resize/orientation change.
+function fixMapSize(){ map.invalidateSize(false); }
+setTimeout(fixMapSize, 200);
+window.addEventListener('load', fixMapSize);
+window.addEventListener('resize', fixMapSize);
+window.addEventListener('orientationchange', function(){ setTimeout(fixMapSize, 300); });
+
+// Draggable pin for placing a new site, with live radius preview
+var newPin = null, newCircle = null;
+function updatePreview(latlng){
+  var r = parseInt(document.getElementById('site-radius').value || 150, 10);
+  document.getElementById('site-lat').value = latlng.lat.toFixed(6);
+  document.getElementById('site-lng').value = latlng.lng.toFixed(6);
+  if(!newPin){
+    newPin = L.marker(latlng, {draggable: true}).addTo(map)
+             .bindPopup('{{ T.gps_new_site if T.gps_new_site else "New site" }}').openPopup();
+    newPin.on('drag', function(e){ updatePreview(e.latlng || e.target.getLatLng()); });
+    newPin.on('dragend', function(e){ updatePreview(e.target.getLatLng()); });
+  } else {
+    newPin.setLatLng(latlng);
+  }
+  if(!newCircle){
+    newCircle = L.circle(latlng, {radius: r, color:'#fd7e14',
+                 fillColor:'#fd7e14', fillOpacity:0.15, dashArray:'6'}).addTo(map);
+  } else {
+    newCircle.setLatLng(latlng);
+    newCircle.setRadius(r);
+  }
+}
+map.on('click', function(e){ updatePreview(e.latlng); });
+document.getElementById('site-radius').addEventListener('input', function(){
+  if(newCircle && newPin){ newCircle.setRadius(parseInt(this.value || 150, 10)); }
+});
+</script>
+{% endblock %}

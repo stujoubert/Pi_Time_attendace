@@ -1,0 +1,167 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ T.nav_my_holidays if T.nav_my_holidays else 'My Holidays' }}{% endblock %}
+{% block content %}
+
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;">
+  <div class="card" style="text-align:center;">
+    <div style="font-size:0.8em;color:#666;">{{ T.hol_allowance if T.hol_allowance else 'Allowance' }} {{ year }}</div>
+    <div style="font-size:1.8em;font-weight:700;">{{ balance.allowance }}</div>
+  </div>
+  <div class="card" style="text-align:center;">
+    <div style="font-size:0.8em;color:#666;">{{ T.hol_used if T.hol_used else 'Used' }}</div>
+    <div style="font-size:1.8em;font-weight:700;">{{ balance.used }}</div>
+  </div>
+  <div class="card" style="text-align:center;">
+    <div style="font-size:0.8em;color:#666;">{{ T.hol_pending if T.hol_pending else 'Pending' }}</div>
+    <div style="font-size:1.8em;font-weight:700;color:#b8860b;">{{ balance.pending }}</div>
+  </div>
+  <div class="card" style="text-align:center;">
+    <div style="font-size:0.8em;color:#666;">{{ T.hol_remaining if T.hol_remaining else 'Remaining' }}</div>
+    <div style="font-size:1.8em;font-weight:700;color:{{ '#0f5132' if balance.remaining > 0 else '#842029' }};">{{ balance.remaining }}</div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start;">
+  <div class="card">
+    <div class="card-title" style="margin-bottom:12px;">{{ T.hol_request if T.hol_request else 'Request Holidays' }}</div>
+    <form method="post" action="{{ url_for('holidays.submit_request') }}">
+      <div class="form-row" style="margin-bottom:10px;">
+        <label class="form-label">{{ T.hol_start if T.hol_start else 'Start date' }}</label>
+        <input type="date" name="start_date" class="form-control" required id="hr-start">
+      </div>
+      <div class="form-row" style="margin-bottom:10px;">
+        <label class="form-label">{{ T.hol_end if T.hol_end else 'End date' }}</label>
+        <input type="date" name="end_date" class="form-control" required id="hr-end">
+      </div>
+      <div class="form-row" style="margin-bottom:10px;">
+        <label class="form-label">{{ T.hol_note if T.hol_note else 'Note (optional)' }}</label>
+        <textarea name="note" class="form-control" rows="2" maxlength="500"></textarea>
+      </div>
+      <div id="hr-daycount" style="font-size:0.85em;color:#666;margin-bottom:10px;"></div>
+      <button class="btn" type="submit" style="width:100%;">
+        <i class="bi bi-send"></i> {{ T.hol_submit if T.hol_submit else 'Submit request' }}
+      </button>
+      <div style="font-size:0.78em;color:#888;margin-top:8px;">
+        {{ T.hol_workdays_note if T.hol_workdays_note else 'Only working days count — weekends and public holidays are excluded.' }}
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-title" style="margin-bottom:12px;">{{ T.hol_my_calendar if T.hol_my_calendar else 'My Calendar' }} {{ year }}</div>
+    <div id="hol-calendar" style="font-size:0.85em;"></div>
+    <div style="display:flex;gap:16px;margin-top:10px;font-size:0.78em;color:#666;">
+      <span><span style="display:inline-block;width:12px;height:12px;background:#0f5132;border-radius:2px;vertical-align:middle;"></span> {{ T.hol_approved if T.hol_approved else 'Approved' }}</span>
+      <span><span style="display:inline-block;width:12px;height:12px;background:#ffc107;border-radius:2px;vertical-align:middle;"></span> {{ T.hol_pending if T.hol_pending else 'Pending' }}</span>
+      <span><span style="display:inline-block;width:12px;height:12px;background:#e9ecef;border-radius:2px;vertical-align:middle;"></span> {{ T.hol_holiday if T.hol_holiday else 'Public holiday' }}</span>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:18px;">
+  <div class="card-title" style="margin-bottom:12px;">{{ T.hol_my_requests if T.hol_my_requests else 'My Requests' }}</div>
+  {% if requests %}
+  <table style="width:100%;border-collapse:collapse;font-size:0.9em;">
+    <thead><tr style="text-align:left;border-bottom:2px solid #e9ecef;">
+      <th style="padding:8px;">{{ T.hol_dates if T.hol_dates else 'Dates' }}</th>
+      <th style="padding:8px;">{{ T.hol_days if T.hol_days else 'Days' }}</th>
+      <th style="padding:8px;">{{ T.hol_status if T.hol_status else 'Status' }}</th>
+      <th style="padding:8px;">{{ T.hol_note if T.hol_note else 'Note' }}</th>
+      <th style="padding:8px;"></th>
+    </tr></thead>
+    <tbody>
+      {% for r in requests %}
+      <tr style="border-bottom:1px solid #f1f3f5;">
+        <td style="padding:8px;">{{ r.start_date }} → {{ r.end_date }}</td>
+        <td style="padding:8px;">{{ r.days_count }}</td>
+        <td style="padding:8px;">
+          {% set color = {'approved':'#d1e7dd:#0f5132','pending':'#fff3cd:#664d03','rejected':'#f8d7da:#842029','cancelled':'#e9ecef:#666'} %}
+          {% set c = color.get(r.status, '#e9ecef:#666').split(':') %}
+          <span style="background:{{ c[0] }};color:{{ c[1] }};padding:2px 10px;border-radius:10px;font-size:0.8em;font-weight:600;">{{ r.status|upper }}</span>
+        </td>
+        <td style="padding:8px;color:#666;">{{ r.note or '—' }}{% if r.decision_note %}<br><span style="font-size:0.85em;color:#999;">HR: {{ r.decision_note }}</span>{% endif %}</td>
+        <td style="padding:8px;">
+          {% if r.status == 'pending' %}
+          <form method="post" action="{{ url_for('holidays.cancel_request', req_id=r.id) }}" style="display:inline;"
+                onsubmit="return confirm('Cancel this request?');">
+            <button class="btn-sm btn-ghost" type="submit">{{ T.hol_cancel if T.hol_cancel else 'Cancel' }}</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div style="color:#888;padding:8px;">{{ T.hol_no_requests if T.hol_no_requests else 'No requests yet.' }}</div>
+  {% endif %}
+</div>
+
+<script>
+// Live working-day count as the employee picks dates
+const MX_HOL_CACHE = {};
+async function loadCalData() {
+  const r = await fetch("{{ url_for('holidays.my_calendar_data') }}?year={{ year }}");
+  return await r.json();
+}
+function isWeekend(d){ const w=d.getUTCDay(); return w===0||w===6; }
+function countWorking(startStr, endStr, holidays){
+  const s = new Date(startStr+"T00:00:00Z"), e = new Date(endStr+"T00:00:00Z");
+  if (e < s) return 0;
+  let n=0; const cur=new Date(s);
+  while(cur<=e){
+    const iso = cur.toISOString().slice(0,10);
+    if(!isWeekend(cur) && !holidays.includes(iso)) n++;
+    cur.setUTCDate(cur.getUTCDate()+1);
+  }
+  return n;
+}
+let CAL = {days:{}, holidays:[]};
+loadCalData().then(data => {
+  CAL = data;
+  renderCalendar();
+});
+const startEl = document.getElementById('hr-start');
+const endEl = document.getElementById('hr-end');
+function updateCount(){
+  if(startEl.value && endEl.value){
+    const n = countWorking(startEl.value, endEl.value, CAL.holidays||[]);
+    document.getElementById('hr-daycount').textContent =
+      n>0 ? `${n} {{ T.hol_working_days if T.hol_working_days else 'working day(s) will be counted' }}` :
+            '{{ T.hol_no_working if T.hol_no_working else 'No working days in this range' }}';
+  }
+}
+startEl.addEventListener('change', updateCount);
+endEl.addEventListener('change', updateCount);
+
+// Minimal 12-month mini calendar highlighting the employee's own days
+function renderCalendar(){
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const year = {{ year }};
+  let html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">';
+  for(let m=0;m<12;m++){
+    html += `<div><div style="font-weight:600;margin-bottom:4px;">${months[m]}</div>`;
+    html += '<table style="border-collapse:collapse;font-size:0.72em;"><tr>';
+    const first = new Date(Date.UTC(year,m,1));
+    const startDow = (first.getUTCDay()+6)%7; // Mon=0
+    const dim = new Date(Date.UTC(year,m+1,0)).getUTCDate();
+    let cell=0;
+    for(let i=0;i<startDow;i++){ html+='<td></td>'; cell++; }
+    for(let d=1;d<=dim;d++){
+      const iso = `${year}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      let bg='transparent', col='#333';
+      if((CAL.holidays||[]).includes(iso)){ bg='#e9ecef'; col='#999'; }
+      const st = (CAL.days||{})[iso];
+      if(st==='approved'){ bg='#0f5132'; col='#fff'; }
+      else if(st==='pending'){ bg='#ffc107'; col='#000'; }
+      html += `<td style="width:18px;height:18px;text-align:center;background:${bg};color:${col};border-radius:3px;">${d}</td>`;
+      cell++;
+      if(cell%7===0) html+='</tr><tr>';
+    }
+    html += '</tr></table></div>';
+  }
+  html += '</div>';
+  document.getElementById('hol-calendar').innerHTML = html;
+}
+</script>
+{% endblock %}

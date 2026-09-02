@@ -1,0 +1,227 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ T.nomina_title }}{% endblock %}
+{% block topbar_actions %}
+<a href="{{ url_for('nomina.empleados_list') }}" class="btn-sm btn-ghost">
+  <i class="bi bi-people"></i> <span class="hide-xs">{{ T.nomina_configure }}</span>
+</a>
+{% if selected_period %}
+<a href="{{ url_for('nomina.export_completa', period_type=period_type, start=selected_period.start.isoformat(), end=selected_period.end.isoformat()) }}"
+   class="btn-sm btn-ghost-blue"><i class="bi bi-file-earmark-excel"></i> <span class="hide-xs">{{ T.nomina_excel }}</span></a>
+<a href="{{ url_for('nomina.export_recibos', period_type=period_type, start=selected_period.start.isoformat(), end=selected_period.end.isoformat()) }}"
+   class="btn-sm btn-ghost"><i class="bi bi-receipt"></i> <span class="hide-xs">{{ T.nomina_recibos }}</span></a>
+<a href="{{ url_for('nomina.export_sua', period_type=period_type, start=selected_period.start.isoformat(), end=selected_period.end.isoformat()) }}"
+   class="btn-sm btn-ghost"><i class="bi bi-filetype-csv"></i> <span class="hide-xs">{{ T.nomina_sua }}</span></a>
+{% endif %}
+{% endblock %}
+{% block content %}
+<style>
+.hide-xs { display:inline; }
+@media(max-width:480px){ .hide-xs { display:none; } }
+
+/* Period selector */
+.period-selector { display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end; }
+.period-selector > div { flex:1;min-width:120px; }
+
+/* Nomina result cards (mobile) */
+.nom-card {
+  background:var(--card-bg);border:0.5px solid var(--border);
+  border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:10px;
+}
+.nom-card-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:10px; }
+.nom-card-name { font-weight:600;font-size:14px; }
+.nom-card-id { font-size:11px;color:var(--muted);font-family:var(--mono); }
+.nom-neto { font-size:20px;font-weight:700;color:var(--accent2); }
+.nom-grid { display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px; }
+.nom-row { display:flex;justify-content:space-between;padding:4px 0;
+           border-bottom:0.5px solid var(--border); }
+.nom-row:last-child { border:none; }
+.nom-label { color:var(--muted); }
+.nom-val { font-weight:500;font-family:var(--mono); }
+.nom-val-green { color:var(--accent2); }
+.nom-val-red { color:var(--danger); }
+.nom-val-warn { color:var(--warning); }
+
+/* Hide table on mobile, show cards */
+.nom-table-wrap { display:block; }
+.nom-cards { display:none; }
+@media(max-width:768px){
+  .nom-table-wrap { display:none; }
+  .nom-cards { display:block; }
+}
+</style>
+
+<!-- Period selector -->
+<div class="card">
+  <form method="get" class="period-selector">
+    <div>
+      <label class="form-label">{{ T.year }}</label>
+      <select name="year" class="form-select" onchange="this.form.submit()">
+        {% for y in range(2024,2028) %}
+        <option value="{{ y }}" {% if y==year %}selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="form-label">{{ T.nomina_period_type }}</label>
+      <select name="period_type" class="form-select" onchange="this.form.submit()">
+        <option value="quincena"  {% if period_type=='quincena'  %}selected{% endif %}>{{ T.nomina_quincena }}</option>
+        <option value="catorcena" {% if period_type=='catorcena' %}selected{% endif %}>{{ T.nomina_catorcena }}</option>
+      </select>
+    </div>
+    <div style="flex:2;min-width:200px;">
+      <label class="form-label">{{ T.nomina_period }}</label>
+      <select name="period_id" class="form-select" onchange="this.form.submit()">
+        <option value="">{{ T.nomina_select_period }}</option>
+        {% set periods = periods_q if period_type=='quincena' else periods_c %}
+        {% for p in periods %}
+        <option value="{{ p.period_num }}" {% if selected_pid==p.period_num|string %}selected{% endif %}>
+          {{ p.label }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+  </form>
+</div>
+
+{% if selected_period %}
+<!-- Summary metrics -->
+<div class="metric-grid" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr));">
+  <div class="metric m-green">
+    <div class="metric-label">{{ T.nomina_total_percepciones }}</div>
+    <div class="metric-value" style="font-size:18px;">${{ "{:,.0f}".format(totals.total_percepciones or 0) }}</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">{{ T.nomina_imss }}</div>
+    <div class="metric-value" style="font-size:18px;color:var(--warning);">${{ "{:,.0f}".format(totals.imss_total or 0) }}</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">{{ T.nomina_isr }}</div>
+    <div class="metric-value" style="font-size:18px;color:var(--warning);">${{ "{:,.0f}".format(totals.isr_retenido or 0) }}</div>
+  </div>
+  <div class="metric m-red">
+    <div class="metric-label">{{ T.nomina_total_deductions }}</div>
+    <div class="metric-value" style="font-size:18px;">${{ "{:,.0f}".format(totals.total_deducciones or 0) }}</div>
+  </div>
+  <div class="metric m-green">
+    <div class="metric-label">{{ T.nomina_net }}</div>
+    <div class="metric-value" style="font-size:20px;">${{ "{:,.0f}".format(totals.neto_pagar or 0) }}</div>
+    <div class="metric-sub">{{ results|length }} {{ T.nomina_employees }}</div>
+  </div>
+</div>
+
+{% if results %}
+<!-- Desktop table -->
+<div class="card nom-table-wrap">
+  <div class="card-title" style="margin-bottom:12px;">{{ selected_period.label }}</div>
+  <div class="table-wrap">
+  <table class="t">
+    <thead><tr>
+      <th>{{ T.employee_id }}</th><th>{{ T.name }}</th>
+      <th>{{ T.days }}</th><th>{{ T.nomina_sd }}</th>
+      <th>{{ T.nomina_percepciones }}</th><th>{{ T.nomina_imss }}</th>
+      <th>{{ T.nomina_isr }}</th><th>{{ T.nomina_subsidio }}</th>
+      <th>{{ T.nomina_total_deductions }}</th>
+      <th style="color:var(--accent2);">{{ T.nomina_net }}</th>
+      <th></th>
+    </tr></thead>
+    <tbody>
+      {% for r in results %}
+      {% if 'error' not in r %}
+      <tr>
+        <td class="mono">{{ r.employee_id }}</td>
+        <td style="font-weight:500;">{{ r.name }}</td>
+        <td>{{ r.dias_trabajados }}/{{ r.dias_periodo }}</td>
+        <td class="mono">${{ "{:,.2f}".format(r.salario_diario) }}</td>
+        <td class="mono" style="color:var(--accent2);">${{ "{:,.2f}".format(r.total_percepciones) }}</td>
+        <td class="mono" style="color:var(--warning);">${{ "{:,.2f}".format(r.imss_total) }}</td>
+        <td class="mono" style="color:var(--warning);">${{ "{:,.2f}".format(r.isr_retenido) }}</td>
+        <td class="mono" style="color:var(--accent);">${{ "{:,.2f}".format(r.subsidio_empleo) }}</td>
+        <td class="mono" style="color:var(--danger);">${{ "{:,.2f}".format(r.total_deducciones) }}</td>
+        <td class="mono" style="font-weight:700;color:var(--accent2);">${{ "{:,.2f}".format(r.neto_pagar) }}</td>
+        <td><a href="{{ url_for('nomina.empleado_config', emp_id=r.employee_id) }}" class="btn-sm btn-ghost" style="padding:3px 7px;font-size:11px;"><i class="bi bi-gear"></i></a></td>
+      </tr>
+      {% else %}
+      <tr>
+        <td class="mono">{{ r.employee_id }}</td>
+        <td colspan="9" style="color:var(--danger);font-size:12px;">
+          {{ T.nomina_no_config }} <a href="{{ url_for('nomina.empleado_config', emp_id=r.employee_id) }}" style="color:var(--accent);">{{ T.nomina_configure_link }}</a>
+        </td>
+      </tr>
+      {% endif %}
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr style="font-weight:600;">
+        <td colspan="4" style="text-align:right;padding:10px;">TOTALES</td>
+        <td class="mono">${{ "{:,.2f}".format(totals.total_percepciones or 0) }}</td>
+        <td class="mono">${{ "{:,.2f}".format(totals.imss_total or 0) }}</td>
+        <td class="mono">${{ "{:,.2f}".format(totals.isr_retenido or 0) }}</td>
+        <td></td>
+        <td class="mono">${{ "{:,.2f}".format(totals.total_deducciones or 0) }}</td>
+        <td class="mono" style="color:var(--accent2);font-size:15px;">${{ "{:,.2f}".format(totals.neto_pagar or 0) }}</td>
+        <td></td>
+      </tr>
+    </tfoot>
+  </table>
+  </div>
+</div>
+
+<!-- Mobile cards -->
+<div class="nom-cards">
+  {% for r in results %}
+  {% if 'error' not in r %}
+  <div class="nom-card">
+    <div class="nom-card-header">
+      <div>
+        <div class="nom-card-name">{{ r.name }}</div>
+        <div class="nom-card-id">{{ r.employee_id }} · {{ r.dias_trabajados }}/{{ r.dias_periodo }} días</div>
+      </div>
+      <div>
+        <div class="nom-neto">${{ "{:,.0f}".format(r.neto_pagar) }}</div>
+        <div style="font-size:10px;color:var(--muted);text-align:right;">{{ T.nomina_net }}</div>
+      </div>
+    </div>
+    <div class="nom-row">
+      <span class="nom-label">{{ T.nomina_percepciones }}</span>
+      <span class="nom-val nom-val-green">${{ "{:,.2f}".format(r.total_percepciones) }}</span>
+    </div>
+    <div class="nom-row">
+      <span class="nom-label">{{ T.nomina_imss }}</span>
+      <span class="nom-val nom-val-warn">${{ "{:,.2f}".format(r.imss_total) }}</span>
+    </div>
+    <div class="nom-row">
+      <span class="nom-label">{{ T.nomina_isr }}</span>
+      <span class="nom-val nom-val-warn">${{ "{:,.2f}".format(r.isr_retenido) }}</span>
+    </div>
+    <div class="nom-row">
+      <span class="nom-label">{{ T.nomina_total_deductions }}</span>
+      <span class="nom-val nom-val-red">${{ "{:,.2f}".format(r.total_deducciones) }}</span>
+    </div>
+    <div style="margin-top:8px;text-align:right;">
+      <a href="{{ url_for('nomina.empleado_config', emp_id=r.employee_id) }}"
+         class="btn-sm btn-ghost" style="font-size:11px;padding:4px 8px;">
+        <i class="bi bi-gear"></i> {{ T.configure }}
+      </a>
+    </div>
+  </div>
+  {% else %}
+  <div class="nom-card">
+    <div style="color:var(--danger);font-size:13px;">
+      {{ r.employee_id }} — {{ T.nomina_no_config }}
+      <a href="{{ url_for('nomina.empleado_config', emp_id=r.employee_id) }}" style="color:var(--accent);">{{ T.nomina_configure_link }}</a>
+    </div>
+  </div>
+  {% endif %}
+  {% endfor %}
+</div>
+
+{% else %}
+<div class="card"><div class="empty-state"><i class="bi bi-people"></i>{{ T.nomina_configure_employees }}</div></div>
+{% endif %}
+
+{% else %}
+<div class="card">
+  <div class="empty-state"><i class="bi bi-calendar3"></i>{{ T.nomina_select_prompt }}</div>
+</div>
+{% endif %}
+{% endblock %}

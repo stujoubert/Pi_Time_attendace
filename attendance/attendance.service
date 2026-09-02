@@ -1,0 +1,31 @@
+[Unit]
+Description=Attendance System
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=attendance
+Group=attendance
+WorkingDirectory=/opt/attendance
+EnvironmentFile=/opt/attendance/.env
+ExecStart=/opt/attendance/venv/bin/python /opt/attendance/server.py
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+
+# Security hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/attendance /opt/attendance/static
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=attendance
+
+[Install]
+WantedBy=multi-user.target

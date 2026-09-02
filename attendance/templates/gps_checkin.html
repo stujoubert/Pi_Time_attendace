@@ -1,0 +1,214 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ T.gps_checkin if T.gps_checkin else 'Check In' }}{% endblock %}
+{% block content %}
+
+{% if not has_sites %}
+<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px 16px;margin-bottom:16px;">
+  {{ T.gps_no_sites if T.gps_no_sites else 'No check-in sites are configured yet. Ask HR to set them up.' }}
+</div>
+{% endif %}
+
+<div class="card" style="max-width:480px;margin-bottom:18px;">
+  <div class="card-title" style="margin-bottom:6px;">{{ T.gps_checkin if T.gps_checkin else 'Check In' }}</div>
+  <p style="color:#666;font-size:0.85em;margin-bottom:14px;">
+    {{ T.gps_help if T.gps_help else 'Your location is only captured at the moment you press a button, to confirm you are at the work site.' }}
+  </p>
+  <div style="display:flex;gap:12px;">
+    <button id="btn-in" class="btn" style="flex:1;padding:18px;font-size:1.1em;background:#0f5132;"
+            onclick="startCheckin('IN')">
+      <i class="bi bi-box-arrow-in-right"></i> {{ T.gps_in if T.gps_in else 'ENTRADA' }}
+    </button>
+    <button id="btn-out" class="btn" style="flex:1;padding:18px;font-size:1.1em;background:#842029;"
+            onclick="startCheckin('OUT')">
+      <i class="bi bi-box-arrow-right"></i> {{ T.gps_out if T.gps_out else 'SALIDA' }}
+    </button>
+  </div>
+  <input type="file" id="selfie-input" accept="image/*" capture="user" style="display:none;">
+  <div style="font-size:0.75em;color:#999;margin-top:8px;">
+    <i class="bi bi-camera"></i> {{ T.gps_photo_note if T.gps_photo_note else 'A selfie is taken at check-in to verify identity.' }}
+  </div>
+  <div id="gps-status" style="margin-top:14px;font-size:0.9em;color:#666;"></div>
+</div>
+
+<div class="card" style="max-width:640px;margin-bottom:18px;">
+  <div class="card-title" style="margin-bottom:10px;">{{ T.gps_my_map if T.gps_my_map else 'My locations' }}</div>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <div id="my-map" style="position:relative;width:100%;max-width:100%;height:260px;border-radius:8px;overflow:hidden;z-index:0;"></div>
+</div>
+
+<div class="card" style="max-width:640px;">
+  <div class="card-title" style="margin-bottom:10px;">{{ T.gps_history if T.gps_history else 'My recent check-ins' }}</div>
+  {% if history %}
+  <table style="width:100%;border-collapse:collapse;font-size:0.85em;">
+    <thead><tr style="text-align:left;border-bottom:2px solid #e9ecef;">
+      <th style="padding:6px 8px;">{{ T.gps_when if T.gps_when else 'When' }}</th>
+      <th style="padding:6px 8px;">{{ T.gps_dir if T.gps_dir else 'Type' }}</th>
+      <th style="padding:6px 8px;">{{ T.gps_site if T.gps_site else 'Site' }}</th>
+      <th style="padding:6px 8px;">{{ T.gps_result if T.gps_result else 'Result' }}</th>
+      <th style="padding:6px 8px;"></th>
+    </tr></thead>
+    <tbody>
+      {% for h in history %}
+      <tr style="border-bottom:1px solid #f1f3f5;">
+        <td style="padding:6px 8px;">{{ h.timestamp[:16] }}</td>
+        <td style="padding:6px 8px;font-weight:600;color:{{ '#0f5132' if h.direction=='IN' else '#842029' }};">{{ h.direction }}</td>
+        <td style="padding:6px 8px;">{{ h.site_name or '—' }}{% if h.distance_m is not none %} <span style="color:#999;">({{ h.distance_m|int }} m)</span>{% endif %}</td>
+        <td style="padding:6px 8px;">
+          {% if h.accepted and h.within_fence %}
+          <span style="background:#d1e7dd;color:#0f5132;padding:1px 8px;border-radius:8px;font-size:0.85em;font-weight:600;">OK</span>
+          {% elif h.accepted and h.lat is none %}
+          <span style="background:#e9ecef;color:#666;padding:1px 8px;border-radius:8px;font-size:0.85em;font-weight:600;">{{ T.gps_no_location if T.gps_no_location else 'SIN GPS' }}</span>
+          {% elif h.accepted %}
+          <span style="background:#fff3cd;color:#664d03;padding:1px 8px;border-radius:8px;font-size:0.85em;font-weight:600;">{{ T.gps_out_of_zone if T.gps_out_of_zone else 'FUERA DE ZONA' }}</span>
+          {% else %}
+          <span style="background:#f8d7da;color:#842029;padding:1px 8px;border-radius:8px;font-size:0.85em;font-weight:600;">{{ T.gps_rejected if T.gps_rejected else 'Rejected' }}</span>
+          {% endif %}
+        </td>
+        <td style="padding:6px 8px;">
+          {% if h.photo_path %}
+          <a href="{{ url_for('gps.checkin_photo', chk_id=h.id) }}" target="_blank" title="{{ T.gps_photo if T.gps_photo else 'Photo' }}">
+            <i class="bi bi-camera" style="color:#0d6efd;"></i>
+          </a>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div style="color:#888;">{{ T.gps_no_history if T.gps_no_history else 'No check-ins yet.' }}</div>
+  {% endif %}
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+var MY_SITES = {{ sites_json | tojson }};
+var MY_HISTORY = {{ history_json | tojson }};
+(function(){
+  var map = L.map('my-map');
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              {maxZoom: 19, attribution: '&copy; OpenStreetMap'}).addTo(map);
+  var bounds = [];
+  MY_SITES.forEach(function(s){
+    L.circle([s.lat, s.lng], {radius: s.radius_m, color:'#0d6efd',
+              fillColor:'#0d6efd', fillOpacity:0.15}).addTo(map)
+     .bindPopup('<b>'+s.name+'</b>');
+    bounds.push([s.lat, s.lng]);
+  });
+  MY_HISTORY.forEach(function(h){
+    if(h.lat == null || h.lng == null || !h.accepted) return;
+    var col = h.within_fence ? '#0f5132' : '#b8860b';
+    L.circleMarker([h.lat, h.lng], {radius:6, color:col, fillColor:col, fillOpacity:0.85})
+     .addTo(map)
+     .bindPopup(h.direction + ' ' + h.timestamp);
+    bounds.push([h.lat, h.lng]);
+  });
+  if(bounds.length){ map.fitBounds(bounds, {padding:[25,25], maxZoom:16}); }
+  else { map.setView([20.5888, -100.3899], 12); }
+  function fixMini(){ map.invalidateSize(false); }
+  setTimeout(fixMini, 200);
+  window.addEventListener('load', fixMini);
+  window.addEventListener('resize', fixMini);
+  window.addEventListener('orientationchange', function(){ setTimeout(fixMini, 300); });
+})();
+function setStatus(msg, color){ 
+  var el=document.getElementById('gps-status');
+  el.textContent=msg; el.style.color=color||'#666';
+}
+function setBusy(b){
+  document.getElementById('btn-in').disabled=b;
+  document.getElementById('btn-out').disabled=b;
+}
+function send(payload){
+  return fetch('{{ url_for("gps.checkin_submit") }}', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  }).then(function(r){ return r.json(); })
+    .then(function(d){
+      if(d.needs_confirm){
+        // Out of zone / poor accuracy / no GPS: employee decides
+        if(confirm(d.msg)){
+          payload.force = 1;
+          return send(payload);
+        }
+        setBusy(false);
+        setStatus('{{ T.gps_cancelled if T.gps_cancelled else "Check-in cancelled." }}', '#666');
+        return;
+      }
+      setBusy(false);
+      setStatus(d.msg, d.ok ? (d.within ? '#0f5132' : '#b8860b') : '#842029');
+      if(d.ok){ setTimeout(function(){ location.reload(); }, 1600); }
+    });
+}
+var pendingDirection = null;
+function startCheckin(direction){
+  pendingDirection = direction;
+  var inp = document.getElementById('selfie-input');
+  inp.value = '';
+  inp.click();
+}
+document.getElementById('selfie-input').addEventListener('change', function(){
+  var f = this.files && this.files[0];
+  if(!f){
+    if(confirm('{{ T.gps_no_photo_confirm if T.gps_no_photo_confirm else "No photo taken. Check in without photo?" }}')){
+      doCheckin(pendingDirection, null);
+    }
+    return;
+  }
+  // Downscale to max 800px and encode as JPEG to keep uploads small
+  var img = new Image();
+  var url = URL.createObjectURL(f);
+  img.onload = function(){
+    var scale = Math.min(1, 800 / Math.max(img.width, img.height));
+    var cv = document.createElement('canvas');
+    cv.width = Math.round(img.width * scale);
+    cv.height = Math.round(img.height * scale);
+    cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+    URL.revokeObjectURL(url);
+    doCheckin(pendingDirection, cv.toDataURL('image/jpeg', 0.8));
+  };
+  img.onerror = function(){ URL.revokeObjectURL(url); doCheckin(pendingDirection, null); };
+  img.src = url;
+});
+// Some browsers fire no change event on camera cancel; recover focus case:
+window.addEventListener('focus', function(){
+  setTimeout(function(){
+    var inp = document.getElementById('selfie-input');
+    if(pendingDirection && (!inp.files || !inp.files.length)){
+      var dir = pendingDirection; pendingDirection = null;
+      if(confirm('{{ T.gps_no_photo_confirm if T.gps_no_photo_confirm else "No photo taken. Check in without photo?" }}')){
+        doCheckin(dir, null);
+      }
+    }
+  }, 700);
+});
+function doCheckin(direction, photo){
+  pendingDirection = null;
+  setBusy(true);
+  if(!navigator.geolocation || !window.isSecureContext){
+    // No geolocation possible: offer the no-location path directly
+    setStatus(!window.isSecureContext
+      ? '{{ T.gps_https if T.gps_https else "Location requires HTTPS — open the site through its secure address." }}'
+      : '{{ T.gps_unsupported if T.gps_unsupported else "This browser does not support location." }}', '#b8860b');
+    send({direction: direction, photo: photo}).catch(function(){ setBusy(false); setStatus('Error de red.', '#842029'); });
+    return;
+  }
+  setStatus('{{ T.gps_locating if T.gps_locating else "Getting your location…" }}');
+  navigator.geolocation.getCurrentPosition(function(pos){
+    send({direction: direction, photo: photo,
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy})
+      .catch(function(){ setBusy(false); setStatus('Error de red.', '#842029'); });
+  }, function(err){
+    // GPS failed: still offer the no-location check-in (server asks confirm)
+    var msgs = {1:'{{ T.gps_denied if T.gps_denied else "Location permission denied — enable it for this site." }}',
+                2:'{{ T.gps_unavailable if T.gps_unavailable else "Location unavailable. Try again." }}',
+                3:'{{ T.gps_timeout if T.gps_timeout else "Location timed out. Try again." }}'};
+    setStatus(msgs[err.code] || 'Error', '#b8860b');
+    send({direction: direction, photo: photo}).catch(function(){ setBusy(false); setStatus('Error de red.', '#842029'); });
+  }, {enableHighAccuracy:true, timeout:15000, maximumAge:0});
+}
+</script>
+{% endblock %}

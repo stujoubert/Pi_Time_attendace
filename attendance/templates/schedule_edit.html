@@ -1,0 +1,109 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ T.edit_template }}{% endblock %}
+{% block content %}
+<div class="card" style="max-width:800px;">
+  <div class="card-header-row">
+    <div class="card-title">{{ T.edit_template }} — {{ template.name }}</div>
+    <a href="{{ url_for('schedules.templates_page') }}" class="btn-sm btn-ghost">← {{ T.back }}</a>
+  </div>
+
+  <!-- Template name/description -->
+  <form method="post" action="{{ url_for('schedules.edit_template', template_id=template.id) }}" style="margin-bottom:24px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+      <div class="form-row" style="margin:0;">
+        <label class="form-label">{{ T.template_name }}</label>
+        <input name="name" class="form-control" value="{{ template.name }}" required>
+      </div>
+      <div class="form-row" style="margin:0;">
+        <label class="form-label">{{ T.description }}</label>
+        <input name="description" class="form-control" value="{{ template.description or '' }}">
+      </div>
+    </div>
+    <button class="btn-sm btn-success" style="margin-top:12px;" type="submit"><i class="bi bi-check-lg"></i> {{ T.save }}</button>
+  </form>
+
+  <hr style="border-color:var(--border);margin:20px 0;">
+
+  <!-- Add Rule -->
+  <div style="margin-bottom:20px;">
+    <div style="font-weight:600;font-size:13px;margin-bottom:10px;">{{ T.add_rule }}</div>
+    <form method="post" action="{{ url_for('schedules.add_rule', template_id=template.id) }}">
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px;">
+        {% for idx, label in [('0',T.weekday_0),('1',T.weekday_1),('2',T.weekday_2),('3',T.weekday_3),('4',T.weekday_4),('5',T.weekday_5),('6',T.weekday_6)] %}
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:5px 10px;">
+          <input type="checkbox" name="weekdays[]" value="{{ idx }}" style="margin:0;"> {{ label }}
+        </label>
+        {% endfor %}
+      </div>
+      <button class="btn-sm btn-ghost-blue" type="submit"><i class="bi bi-plus"></i> {{ T.add_rule }}</button>
+    </form>
+  </div>
+
+  <!-- Existing Rules -->
+  {% if rules %}
+    {% for r in rules %}
+    <div style="border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          {% for d in r.weekdays.split(',') %}
+          <span class="badge badge-blue">{{ T['weekday_' ~ d.strip()] }}</span>
+          {% endfor %}
+        </div>
+        <form method="post" action="{{ url_for('schedules.delete_rule', rule_id=r.id) }}" onsubmit="return confirm('{{ T.confirm_delete_rule }}')">
+          <button class="btn-sm" style="background:transparent;border:1px solid var(--border);color:var(--danger);border-radius:7px;padding:4px 8px;cursor:pointer;font-size:12px;"><i class="bi bi-trash"></i> {{ T.delete_rule }}</button>
+        </form>
+      </div>
+
+      <!-- Add shift to this rule -->
+      <form method="post" action="{{ url_for('schedules.add_shift', rule_id=r.id) }}" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:10px;">
+        <div>
+          <label class="form-label">{{ T.start_time }}</label>
+          <input type="time" name="start_time" class="form-control" style="width:130px;" required>
+        </div>
+        <div>
+          <label class="form-label">{{ T.end_time }}</label>
+          <input type="time" name="end_time" class="form-control" style="width:130px;" required>
+        </div>
+        <div>
+          <label class="form-label">{{ T.grace_minutes }}</label>
+          <input type="number" name="grace_minutes" class="form-control" value="0" style="width:80px;" min="0">
+        </div>
+        <div>
+          <label class="form-label">{{ T.break_minutes }}</label>
+          <input type="number" name="break_minutes" class="form-control" value="0" style="width:80px;" min="0">
+        </div>
+        <div>
+          <button class="btn-sm btn-success" type="submit"><i class="bi bi-plus"></i> {{ T.add_hours }}</button>
+        </div>
+      </form>
+
+      <!-- Existing shifts -->
+      {% if r.shifts %}
+      <table class="t" style="font-size:12px;">
+        <thead><tr><th>{{ T.start_time }}</th><th>{{ T.end_time }}</th><th>{{ T.grace_minutes }}</th><th>{{ T.break_minutes }}</th><th></th></tr></thead>
+        <tbody>
+          {% for s in r.shifts %}
+          <tr>
+            <td class="mono">{{ s.start_time }}</td>
+            <td class="mono">{{ s.end_time }}</td>
+            <td>{{ s.grace_minutes }}</td>
+            <td>{{ s.break_minutes }}</td>
+            <td>
+              <form method="post" action="{{ url_for('schedules.delete_shift', shift_id=s.id) }}" onsubmit="return confirm('{{ T.confirm_delete_hours }}')">
+                <button class="btn-sm" style="background:transparent;border:1px solid var(--border);color:var(--danger);border-radius:7px;padding:3px 8px;cursor:pointer;font-size:11px;"><i class="bi bi-x"></i></button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p style="color:var(--muted);font-size:12px;margin:0;">{{ T.no_hours_defined }}</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  {% else %}
+  <div class="empty-state" style="padding:20px;"><i class="bi bi-clock"></i>{{ T.no_rules }}</div>
+  {% endif %}
+</div>
+{% endblock %}

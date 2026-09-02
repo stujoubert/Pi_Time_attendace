@@ -1,0 +1,138 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ T.nav_accounts }}{% endblock %}
+{% block head %}
+<style>
+/* Account create form — stacks on mobile */
+.acc-create-form { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-top:12px; }
+.acc-create-form input, .acc-create-form select { flex:1; min-width:120px; }
+
+/* Account table cards on mobile */
+.acc-table-wrap { display:block; }
+.acc-cards { display:none; }
+
+@media(max-width:768px){
+  /* Stack header and form vertically */
+  .acc-header { flex-direction:column !important; align-items:flex-start !important; gap:0 !important; }
+  .acc-create-form { flex-direction:column; width:100%; }
+  .acc-create-form input, .acc-create-form select, .acc-create-form button { width:100%; }
+
+  /* Hide table, show cards */
+  .acc-table-wrap { display:none; }
+  .acc-cards { display:block; }
+
+  .acc-card { border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:8px; background:var(--surface); }
+  .acc-card-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .acc-card-name { font-weight:600; font-size:15px; }
+  .acc-card-actions { display:flex; gap:6px; flex-wrap:wrap; }
+  .acc-card-actions button, .acc-card-actions .btn-sm { flex:1; text-align:center; }
+
+  /* Reset form on mobile */
+  .acc-reset-form { flex-direction:column !important; }
+  .acc-reset-form input { width:100% !important; max-width:100% !important; }
+}
+</style>
+{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header-row acc-header">
+    <div class="card-title">{{ T.nav_accounts }}</div>
+    <form method="post" action="{{ url_for('accounts.accounts_create') }}" class="acc-create-form">
+      <input name="username" class="form-control" placeholder="{{ T.username }}" required>
+      <input type="password" name="password" class="form-control" placeholder="{{ T.password }}" required>
+      <select name="role" class="form-select" required id="acc-role">
+        <option value="viewer">{{ T.role_viewer }}</option>
+        <option value="manager">{{ T.role_manager }}</option>
+        <option value="admin">{{ T.role_admin }}</option>
+        <option value="employee">{{ T.role_employee if T.role_employee else 'Employee' }}</option>
+        <option value="foreman">{{ T.role_foreman if T.role_foreman else 'Foreman' }}</option>
+      </select>
+      <input name="employee_id" class="form-control" id="acc-empid"
+             placeholder="{{ T.hol_employee_id if T.hol_employee_id else 'Employee ID' }}"
+             style="display:none;">
+      <button class="btn-sm btn-success" type="submit"><i class="bi bi-plus"></i> {{ T.create }}</button>
+    </form>
+    <script>
+    (function(){
+      var role = document.getElementById('acc-role');
+      var emp  = document.getElementById('acc-empid');
+      function sync(){ var showEmp = (role.value === 'employee' || role.value === 'foreman');
+                       emp.style.display = showEmp ? '' : 'none';
+                       emp.required = (role.value === 'employee'); }
+      role.addEventListener('change', sync); sync();
+    })();
+    </script>
+  </div>
+
+  {# Desktop table #}
+  <div class="acc-table-wrap">
+  <table class="t">
+    <thead><tr><th>{{ T.username }}</th><th>{{ T.role }}</th><th>{{ T.status }}</th><th>{{ T.actions }}</th></tr></thead>
+    <tbody>
+      {% for acc in accounts %}
+      <tr>
+        <td style="font-weight:500;">{{ acc.username }}</td>
+        <td><span class="badge badge-blue">{{ acc.role }}</span></td>
+        <td>{% if acc.active %}<span class="badge badge-green">{{ T.active }}</span>{% else %}<span class="badge badge-gray">{{ T.inactive }}</span>{% endif %}</td>
+        <td>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+            <button class="btn-sm btn-ghost" onclick="document.getElementById('rm{{ acc.id }}').style.display='flex'">{{ T.reset_password }}</button>
+            {% if acc.id != session.get('account_id') %}
+            <form method="post" action="{{ url_for('accounts.accounts_toggle', account_id=acc.id) }}" style="display:inline;">
+              <button class="btn-sm btn-ghost">{% if acc.active %}{{ T.deactivate }}{% else %}{{ T.activate }}{% endif %}</button>
+            </form>
+            {% else %}
+            <span class="badge badge-gray">{{ T.current_user }}</span>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      <tr id="rm{{ acc.id }}" style="display:none;background:#FEF9F0;">
+        <td colspan="4">
+          <form method="post" action="{{ url_for('accounts.accounts_reset', account_id=acc.id) }}"
+                class="acc-reset-form" style="display:flex;gap:8px;align-items:center;padding:8px 0;flex-wrap:wrap;">
+            <span style="font-size:13px;font-weight:500;">{{ T.reset_password }}: {{ acc.username }}</span>
+            <input type="password" name="password" class="form-control" placeholder="{{ T.new_password }}" style="max-width:200px;" required>
+            <button class="btn-sm btn-warning" type="submit">{{ T.reset_password }}</button>
+            <button type="button" class="btn-sm btn-ghost" onclick="document.getElementById('rm{{ acc.id }}').style.display='none'">{{ T.cancel }}</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  {# Mobile cards #}
+  <div class="acc-cards">
+  {% for acc in accounts %}
+  <div class="acc-card">
+    <div class="acc-card-header">
+      <div>
+        <div class="acc-card-name">{{ acc.username }}</div>
+        <span class="badge badge-blue">{{ acc.role }}</span>
+      </div>
+      {% if acc.active %}<span class="badge badge-green">{{ T.active }}</span>{% else %}<span class="badge badge-gray">{{ T.inactive }}</span>{% endif %}
+    </div>
+    <div class="acc-card-actions">
+      <button class="btn-sm btn-ghost" onclick="document.getElementById('mob-rm{{ acc.id }}').style.display=document.getElementById('mob-rm{{ acc.id }}').style.display=='none'?'block':'none'">{{ T.reset_password }}</button>
+      {% if acc.id != session.get('account_id') %}
+      <form method="post" action="{{ url_for('accounts.accounts_toggle', account_id=acc.id) }}" style="flex:1;">
+        <button class="btn-sm btn-ghost" style="width:100%;">{% if acc.active %}{{ T.deactivate }}{% else %}{{ T.activate }}{% endif %}</button>
+      </form>
+      {% endif %}
+    </div>
+    <div id="mob-rm{{ acc.id }}" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+      <form method="post" action="{{ url_for('accounts.accounts_reset', account_id=acc.id) }}" style="display:flex;flex-direction:column;gap:8px;">
+        <input type="password" name="password" class="form-control" placeholder="{{ T.new_password }}" required>
+        <div style="display:flex;gap:6px;">
+          <button class="btn-sm btn-warning" type="submit" style="flex:1;">{{ T.reset_password }}</button>
+          <button type="button" class="btn-sm btn-ghost" onclick="document.getElementById('mob-rm{{ acc.id }}').style.display='none'" style="flex:1;">{{ T.cancel }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+  </div>
+
+</div>
+{% endblock %}

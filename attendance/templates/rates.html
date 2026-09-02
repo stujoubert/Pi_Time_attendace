@@ -1,0 +1,272 @@
+{% extends "layout.html" %}
+{% block title %}{{ T.nav_rates }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>⚖️ {{ T.nav_rates }}</h1>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }} mb-4">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<div class="alert-info-box mb-6">
+  <strong>{{ 'Annual Update Guide' }}:</strong>
+  {{ 'UMA' }} → INEGI (febrero) &nbsp;|&nbsp;
+  {{ 'Salario Mínimo' }} → CONASAMI (enero) &nbsp;|&nbsp;
+  ISR / Subsidio → SAT Anexo 8 (enero) &nbsp;|&nbsp;
+  IMSS → DOF (cuando cambie)
+</div>
+
+{# ── Year / Period selector ─────────────────────────────────────────────── #}
+<div class="card mb-6">
+  <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;padding:16px;">
+    <form method="GET" action="{{ url_for('rates.rates_index') }}"
+          style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <label class="form-label" style="margin:0;white-space:nowrap;">{{ T.year }}</label>
+        <input type="number" name="year" value="{{ year }}" min="2024" max="2099"
+               class="form-control" style="width:90px;">
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <label class="form-label" style="margin:0;white-space:nowrap;">{{ T.period }}</label>
+        <select name="period_type" class="form-select" style="width:auto;">
+          <option value="quincena"  {% if period_type=='quincena'  %}selected{% endif %}>Quincena</option>
+          <option value="catorcena" {% if period_type=='catorcena' %}selected{% endif %}>Catorcena</option>
+        </select>
+      </div>
+      <button type="submit" class="btn-sm btn-ghost">{{ T.refresh }}</button>
+    </form>
+    <form method="POST" action="{{ url_for('rates.add_year') }}"
+          style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+      <span style="font-size:13px;color:var(--muted);white-space:nowrap;">{{ 'Copy' }} {{ year }} →</span>
+      <input type="hidden" name="src_year" value="{{ year }}">
+      <input type="number" name="new_year" value="{{ year+1 }}" min="2024" max="2099"
+             class="form-control" style="width:90px;">
+      <button type="submit" class="btn-sm btn-ghost">📋 {{ 'Copy for new year' }}</button>
+    </form>
+  </div>
+</div>
+
+<div class="rates-grid">
+
+{# ── UMA & Salario Mínimo ───────────────────────────────────────────────── #}
+<div class="card">
+  <div class="card-header">
+    <h2 class="card-title">📊 UMA & {{ 'Salario Mínimo' }}</h2>
+    <span class="badge badge-blue">INEGI / CONASAMI</span>
+  </div>
+  <form method="POST" action="{{ url_for('rates.update_uma') }}">
+    <div class="card-body">
+      <table class="rates-table">
+        <thead><tr><th>{{ 'Concept' }}</th><th>{{ 'Value' }} (MXN)</th><th>{{ 'Source' }}</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>UMA Diario</strong></td>
+            <td><input type="number" name="uma_diario" value="{{ rates.uma_diario }}" step="0.01" class="input-sm input-num" required></td>
+            <td class="text-muted text-sm">INEGI — febrero</td>
+          </tr>
+          <tr>
+            <td><strong>UMA Mensual</strong></td>
+            <td><input type="number" name="uma_mensual" value="{{ rates.uma_mensual }}" step="0.01" class="input-sm input-num" required></td>
+            <td class="text-muted text-sm">INEGI — febrero</td>
+          </tr>
+          <tr>
+            <td><strong>UMA Anual</strong></td>
+            <td><input type="number" name="uma_anual" value="{{ rates.uma_anual }}" step="0.01" class="input-sm input-num" required></td>
+            <td class="text-muted text-sm">INEGI — febrero</td>
+          </tr>
+          <tr><td colspan="3"><hr class="divider"></td></tr>
+          <tr>
+            <td><strong>SMG General</strong></td>
+            <td><input type="number" name="smg_general" value="{{ rates.smg_general }}" step="0.01" class="input-sm input-num" required></td>
+            <td class="text-muted text-sm">CONASAMI — enero</td>
+          </tr>
+          <tr>
+            <td><strong>SMG Frontera Norte</strong></td>
+            <td><input type="number" name="smg_frontera" value="{{ rates.smg_frontera }}" step="0.01" class="input-sm input-num" required></td>
+            <td class="text-muted text-sm">CONASAMI — enero</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card-footer">
+      <button type="submit" class="btn btn-primary">💾 {{ T.save }}</button>
+      <a href="https://www.inegi.org.mx/temas/uma/" target="_blank" class="btn btn-outline btn-sm">🔗 INEGI UMA</a>
+      <a href="https://www.conasami.gob.mx/ng/tabla-de-salarios-minimos-generales-y-profesionales-por-areas-geograficas/" target="_blank" class="btn btn-outline btn-sm">🔗 CONASAMI</a>
+    </div>
+  </form>
+</div>
+
+{# ── IMSS Cuotas ────────────────────────────────────────────────────────── #}
+<div class="card">
+  <div class="card-header">
+    <h2 class="card-title">🏥 IMSS Cuotas Obreras</h2>
+    <span class="badge badge-green">IMSS — DOF</span>
+  </div>
+  <form method="POST" action="{{ url_for('rates.update_imss') }}">
+    <div class="card-body">
+      <table class="rates-table">
+        <thead><tr><th>{{ 'Concept' }}</th><th>{{ 'Rate' }} (%)</th><th>{{ 'Base' }}</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Enfermedad y Maternidad</strong><br><span class="text-muted text-xs">Hasta 3 UMA</span></td>
+            <td><input type="number" name="imss_em" value="{{ rates.imss_em }}" step="0.00001" class="input-sm input-num" required></td>
+            <td class="text-muted text-sm">0.40%</td>
+          </tr>
+          <tr>
+            <td><strong>E y M Excedente</strong><br><span class="text-muted text-xs">Sobre 3 UMA</span></td>
+            <td><input type="number" name="imss_em_exc" value="{{ rates.imss_em_exc }}" step="0.00001" class="input-sm input-num" required></td>
+            <td class="text-muted text-sm">0.40%</td>
+          </tr>
+          <tr>
+            <td><strong>Invalidez y Vida</strong></td>
+            <td><input type="number" name="imss_iv" value="{{ rates.imss_iv }}" step="0.00001" class="input-sm input-num" required></td>
+            <td class="text-muted text-sm">0.625%</td>
+          </tr>
+          <tr>
+            <td><strong>Cesantía y Vejez</strong></td>
+            <td><input type="number" name="imss_cv" value="{{ rates.imss_cv }}" step="0.00001" class="input-sm input-num" required></td>
+            <td class="text-muted text-sm">1.125%</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card-footer">
+      <button type="submit" class="btn btn-primary">💾 {{ T.save }}</button>
+      <a href="https://www.imss.gob.mx/patrones/cuotas" target="_blank" class="btn btn-outline btn-sm">🔗 IMSS Cuotas</a>
+    </div>
+  </form>
+</div>
+
+</div>{# end rates-grid #}
+
+{# ── ISR Tabla ──────────────────────────────────────────────────────────── #}
+<div class="card mt-6">
+  <div class="card-header">
+    <h2 class="card-title">📋 Tabla ISR {{ year }} — {{ period_type|capitalize }}</h2>
+    <span class="badge badge-orange">SAT Anexo 8 — enero</span>
+  </div>
+  <form method="POST" action="{{ url_for('rates.update_isr') }}">
+    <input type="hidden" name="year" value="{{ year }}">
+    <input type="hidden" name="period_type" value="{{ period_type }}">
+    <div class="card-body table-responsive">
+      <table class="rates-table" id="isr-table">
+        <thead>
+          <tr>
+            <th>Límite Inferior</th>
+            <th>Límite Superior</th>
+            <th>Cuota Fija</th>
+            <th>% sobre Excedente</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="isr-body">
+          {% for row in isr %}
+          <tr>
+            <td><input type="number" name="isr_li[]" value="{{ row.li }}" step="0.01" class="input-sm input-num" required></td>
+            <td><input type="number" name="isr_ls[]" value="{{ row.ls if row.ls < 9000000 else '' }}" step="0.01" class="input-sm input-num" placeholder="∞"></td>
+            <td><input type="number" name="isr_cuota[]" value="{{ row.cuota_fija }}" step="0.01" class="input-sm input-num" required></td>
+            <td><input type="number" name="isr_tasa[]" value="{{ row.tasa_excedente }}" step="0.0001" class="input-sm input-num" required></td>
+            <td><button type="button" class="btn-icon btn-danger-icon" onclick="this.closest('tr').remove()">🗑</button></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <button type="button" class="btn btn-outline btn-sm mt-3" onclick="addISRRow()">+ {{ '+ Add row' }}</button>
+    </div>
+    <div class="card-footer">
+      <button type="submit" class="btn btn-primary">💾 {{ 'Save ISR Table' }}</button>
+      <a href="https://www.sat.gob.mx/consulta/65469/conoce-las-tarifas-para-el-calculo-del-isr" target="_blank" class="btn btn-outline btn-sm">🔗 SAT Tarifas</a>
+    </div>
+  </form>
+</div>
+
+{# ── Subsidio Tabla ─────────────────────────────────────────────────────── #}
+<div class="card mt-6">
+  <div class="card-header">
+    <h2 class="card-title">💰 Tabla Subsidio al Empleo {{ year }} — {{ period_type|capitalize }}</h2>
+    <span class="badge badge-green">SAT Anexo 8 — enero</span>
+  </div>
+  <form method="POST" action="{{ url_for('rates.update_subsidio') }}">
+    <input type="hidden" name="year" value="{{ year }}">
+    <input type="hidden" name="period_type" value="{{ period_type }}">
+    <div class="card-body table-responsive">
+      <table class="rates-table" id="sub-table">
+        <thead>
+          <tr>
+            <th>Límite Inferior</th>
+            <th>Límite Superior</th>
+            <th>Subsidio</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="sub-body">
+          {% for row in subsidio %}
+          <tr>
+            <td><input type="number" name="sub_li[]" value="{{ row.li }}" step="0.01" class="input-sm input-num" required></td>
+            <td><input type="number" name="sub_ls[]" value="{{ row.ls if row.ls < 9000000 else '' }}" step="0.01" class="input-sm input-num" placeholder="∞"></td>
+            <td><input type="number" name="sub_subsidio[]" value="{{ row.subsidio }}" step="0.01" class="input-sm input-num" required></td>
+            <td><button type="button" class="btn-icon btn-danger-icon" onclick="this.closest('tr').remove()">🗑</button></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <button type="button" class="btn btn-outline btn-sm mt-3" onclick="addSubRow()">+ {{ '+ Add row' }}</button>
+    </div>
+    <div class="card-footer">
+      <button type="submit" class="btn btn-primary">💾 {{ 'Save Subsidio Table' }}</button>
+    </div>
+  </form>
+</div>
+
+<script>
+function addISRRow() {
+  const tbody = document.getElementById('isr-body');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="number" name="isr_li[]" step="0.01" class="input-sm input-num" required></td>
+    <td><input type="number" name="isr_ls[]" step="0.01" class="input-sm input-num" placeholder="∞"></td>
+    <td><input type="number" name="isr_cuota[]" step="0.01" class="input-sm input-num" required></td>
+    <td><input type="number" name="isr_tasa[]" step="0.0001" class="input-sm input-num" required></td>
+    <td><button type="button" class="btn-icon btn-danger-icon" onclick="this.closest('tr').remove()">🗑</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+function addSubRow() {
+  const tbody = document.getElementById('sub-body');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="number" name="sub_li[]" step="0.01" class="input-sm input-num" required></td>
+    <td><input type="number" name="sub_ls[]" step="0.01" class="input-sm input-num" placeholder="∞"></td>
+    <td><input type="number" name="sub_subsidio[]" step="0.01" class="input-sm input-num" required></td>
+    <td><button type="button" class="btn-icon btn-danger-icon" onclick="this.closest('tr').remove()">🗑</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+</script>
+
+<style>
+.rates-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+@media (max-width: 768px) { .rates-grid { grid-template-columns: 1fr !important; } }
+.rates-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.rates-table th { background: var(--navy); color: white; padding: 8px 10px; text-align: left; font-size: 0.8rem; }
+.rates-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.rates-table tr:nth-child(even) td { background: var(--gray-50); }
+.input-num { width: 120px; text-align: right; }
+.card-header { display: flex; align-items: center; gap: 1rem; padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); }
+.card-footer { padding: 1rem 1.25rem; border-top: 1px solid var(--border); display: flex; gap: 0.75rem; align-items: center; }
+.badge-orange { background: #FEF3C7; color: #92400E; }
+.badge-blue   { background: #EFF6FF; color: #1D4ED8; }
+.badge-green  { background: #ECFDF5; color: #065F46; }
+.alert-info-box { background: #EFF6FF; border-left: 4px solid #2563EB; padding: 0.75rem 1rem; border-radius: 6px; font-size: 0.875rem; color: #1E3A5F; }
+.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+.btn-icon { background: none; border: none; cursor: pointer; font-size: 1rem; padding: 2px 6px; border-radius: 4px; }
+.btn-icon:hover { background: #FEE2E2; }
+.table-responsive { overflow-x: auto; }
+.flex-row { display: flex; flex-direction: row; }
+.align-center { align-items: center; }
+.gap-2 { gap: 0.5rem; } .gap-3 { gap: 0.75rem; } .gap-4 { gap: 1rem; }
+</style>
+{% endblock %}
