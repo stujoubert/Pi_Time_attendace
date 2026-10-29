@@ -39,3 +39,48 @@ def send_weekly_report():
     server.send_message(msg)
     server.quit()
     return True
+
+
+def send_daily_report(target_date=None):
+    """
+    Email a one-day attendance report (first-IN / last-OUT grid).
+
+    Runs from the scheduler at 09:00; with no target_date it reports the
+    PREVIOUS full day (yesterday), which is the complete day's attendance at
+    the time it's sent. Reuses the same SMTP settings and recipient as the
+    weekly report, and only sends when enabled and SMTP is configured.
+    """
+    if get_setting("daily_report_enabled", "1") not in ("1", "true", "True", "on"):
+        return False
+
+    smtp_sender = get_setting("smtp_sender", "")
+    smtp_host   = get_setting("smtp_host",   "smtp.gmail.com")
+    smtp_port   = int(get_setting("smtp_port", "587") or 587)
+    smtp_pass   = get_setting("smtp_pass",   "")
+    recipient   = get_setting("report_recipient", smtp_sender)
+
+    if not smtp_sender or not smtp_pass or not recipient:
+        return False
+
+    day = target_date or (datetime.now().date() - timedelta(days=1))
+
+    # export_weekly_fifo with start == end produces a single-day IN/OUT grid.
+    buf = export_weekly_fifo(day, day)
+
+    msg = MIMEMultipart()
+    msg["From"]    = smtp_sender
+    msg["To"]      = recipient
+    msg["Subject"] = f"Daily Attendance {day}"
+    msg.attach(MIMEText(f"Daily attendance report attached.\nDate: {day}", "plain"))
+
+    fname = f"daily_attendance_{day}.xlsx"
+    part = MIMEApplication(buf.read(), Name=fname)
+    part["Content-Disposition"] = f'attachment; filename="{fname}"'
+    msg.attach(part)
+
+    server = smtplib.SMTP(smtp_host, smtp_port, timeout=20)
+    server.starttls()
+    server.login(smtp_sender, smtp_pass)
+    server.send_message(msg)
+    server.quit()
+    return True

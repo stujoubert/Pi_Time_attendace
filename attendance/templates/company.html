@@ -81,8 +81,16 @@
         <label class="form-label">{{ T.report_recipient }}</label>
         <input type="email" name="report_recipient" class="form-control" value="{{ smtp.get('report_recipient','') }}">
       </div>
+      <div class="form-row">
+        <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" name="daily_report_enabled" value="1"
+                 {% if smtp.get('daily_report_enabled','1') in ['1','true','True','on'] %}checked{% endif %}
+                 style="width:auto;margin:0;">
+          Email a daily report every day at 09:00
+        </label>
+      </div>
       <div style="background:var(--bg);border-radius:8px;padding:12px;margin-bottom:14px;font-size:12px;color:var(--muted);">
-        <i class="bi bi-info-circle"></i> Weekly reports are sent automatically every Monday at 06:00.
+        <i class="bi bi-info-circle"></i> The daily report (previous day's attendance) is sent at 09:00 when enabled above. Weekly reports are sent automatically every Monday at 06:00. Both go to the recipient address and require SMTP to be configured.
       </div>
       <button class="btn-sm btn-success" type="submit"><i class="bi bi-check-lg"></i> {{ T.save_changes }}</button>
     </form>

@@ -48,26 +48,41 @@ def _normalize_ts(ts: str) -> str:
 
 def _parse_direction(ev: dict) -> str:
     """
-    Determine IN/OUT from event. Hikvision uses different fields across firmware:
-    - direction: 0=entering, 1=exiting (some firmware)
-    - type: "IN"/"OUT" (some firmware)
-    - minor event code: 75=in, 76=out
+    Determine IN/OUT from event. Hikvision uses different fields across firmware.
+    On the DS-K1T343 terminals here, ALL punches are minor=75 regardless of
+    direction, and the real in/out is carried in attendanceStatus / label —
+    so those MUST be checked first, or every event gets mislabelled "IN"
+    (which corrupts first-in/last-out and silently collides in dedup).
     """
-    # Check explicit type field first (original system used this)
+    # 1. attendanceStatus: "checkIn" / "checkOut" (authoritative on these units)
+    att = str(ev.get("attendanceStatus") or "").strip().lower()
+    if att in ("checkin", "checkinagain", "breakout"):
+        return "IN"
+    if att in ("checkout", "breakin"):
+        return "OUT"
+
+    # 2. label: "Entrada" / "Salida" (localized, same source)
+    label = str(ev.get("label") or "").strip().lower()
+    if label in ("entrada", "entry", "in"):
+        return "IN"
+    if label in ("salida", "exit", "out"):
+        return "OUT"
+
+    # 3. explicit type field (older firmware)
     ev_type = ev.get("type") or ev.get("eventType") or ""
     if str(ev_type).upper() in ("IN", "ENTRY", "ENTERING"):
         return "IN"
     if str(ev_type).upper() in ("OUT", "EXIT", "EXITING"):
         return "OUT"
 
-    # Check direction field
+    # 4. direction field (older firmware)
     direction = ev.get("direction")
     if direction in (0, "0", "entering", "in", "IN"):
         return "IN"
     if direction in (1, "1", "exiting", "out", "OUT"):
         return "OUT"
 
-    # Check minor event code
+    # 5. last resort: minor code (only valid on firmware that splits 75/76)
     minor = ev.get("minor")
     if minor == 75:
         return "IN"
@@ -206,7 +221,11 @@ def fetch_from_device(ip: str, username: str, password: str,
         start = (now - timedelta(minutes=LOOKBACK_MINUTES)).strftime(
             f"%Y-%m-%dT%H:%M:%S{tz}")
     if not end:
-        end = now.strftime(f"%Y-%m-%dT%H:%M:%S{tz}")
+        end = (now + timedelta(minutes=5)).strftime(f"%Y-%m-%dT%H:%M:%S{tz}")
+        # end is set to now+5min (not just now): punches that land between a
+        # fetch running and its window boundary were invisible until the next
+        # fetch. A small forward buffer plus the wide lookback + dedup means
+        # every event is captured on the very next fetch with no gap.
 
     _prof = None
     try:
@@ -269,23 +288,30 @@ def sync_users_from_devices() -> dict:
     import uuid as _uuid
     summary = {}
     for d in devices:
-        auth = _Digest(d["username"], d["password"])
         ip   = d["ip"]
         added, updated, skipped = 0, 0, 0
         pos = 0
         search_id = str(_uuid.uuid4())
+        consecutive_errors = 0
 
         conn = get_conn()
         try:
             while True:
                 try:
+                    # Fresh digest per page (short-lived nonce on these terminals)
+                    auth = _Digest(d["username"], d["password"])
                     r = _requests.post(
                         f"http://{ip}/ISAPI/AccessControl/UserInfo/Search?format=json",
                         json={"UserInfoSearchCond": {"searchID": search_id,
                               "searchResultPosition": pos, "maxResults": 50}},
                         auth=auth, timeout=15, verify=False)
                     if r.status_code != 200:
-                        break
+                        consecutive_errors += 1
+                        if consecutive_errors >= 3:
+                            break
+                        import time as _t; _t.sleep(2)
+                        continue
+                    consecutive_errors = 0
                     body  = r.json()
                     root  = body.get("UserInfoSearch") or body.get("UserInfoSearchResult") or {}
                     users = root.get("UserInfo", [])

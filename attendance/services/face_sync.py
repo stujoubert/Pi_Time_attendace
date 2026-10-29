@@ -78,6 +78,7 @@ def pull_faces_from_device(device_id: int) -> dict:
     """Download all enrolled faces from FDLib and store locally."""
     import requests as _requests
     from requests.auth import HTTPDigestAuth as _Digest
+    import time as _time_pg
 
     conn = get_conn()
     d = conn.execute(
@@ -94,16 +95,38 @@ def pull_faces_from_device(device_id: int) -> dict:
 
     all_faces = []
     pos = 0
+    consecutive_errors = 0
     while True:
+        # Fresh digest per page — these terminals issue short-lived nonces, so a
+        # reused auth object goes stale after the first page and returns 401,
+        # which previously broke the loop and left most faces unretrieved.
+        page_auth = _Digest(d["username"], d["password"])
         try:
             r = _requests.post(
                 f"http://{ip}/ISAPI/Intelligent/FDLib/FDSearch?format=json",
                 json={"searchResultPosition": pos, "maxResults": 30,
                       "faceLibType": "blackFD", "FDID": "1"},
-                auth=auth, timeout=15, verify=False)
+                auth=page_auth, timeout=15, verify=False)
             if r.status_code >= 400:
-                break
-            data    = r.json()
+                # Transient (lockout/stale nonce) — wait and retry this page once
+                # before giving up, instead of abandoning the whole pagination.
+                consecutive_errors += 1
+                if consecutive_errors >= 3:
+                    log.warning(f"[FACE PULL] {d['name']}: giving up at pos={pos} after 3 errors")
+                    break
+                _time_pg.sleep(3)
+                continue
+            consecutive_errors = 0
+            # Response should be JSON; if the device returned an XML error page
+            # (e.g. userCheck), treat it as a transient error and retry.
+            try:
+                data = r.json()
+            except Exception:
+                consecutive_errors += 1
+                if consecutive_errors >= 3:
+                    break
+                _time_pg.sleep(3)
+                continue
             matches = data.get("MatchList", [])
             if not matches:
                 break
@@ -111,14 +134,19 @@ def pull_faces_from_device(device_id: int) -> dict:
             if data.get("responseStatusStrg") != "MORE":
                 break
             pos += len(matches)
+            _time_pg.sleep(0.5)   # pace pages to avoid the rapid-request lockout
         except Exception as e:
-            log.debug(f"[FACE PULL] FDSearch error: {e}")
-            break
+            consecutive_errors += 1
+            log.debug(f"[FACE PULL] FDSearch error at pos={pos}: {e}")
+            if consecutive_errors >= 3:
+                break
+            _time_pg.sleep(3)
 
     if not all_faces:
         return {"pulled": 0, "skipped": 0, "failed": 0, "employees": []}
 
     pulled, skipped, failed, emp_list = 0, 0, 0, []
+    import time as _time
     for m in all_faces:
         emp_id   = str(m.get("FPID", "")).strip()
         face_url = m.get("faceURL", "")
@@ -130,8 +158,21 @@ def pull_faces_from_device(device_id: int) -> dict:
             continue
         if not face_url.startswith("http"):
             face_url = f"http://{ip}/{face_url}"
+
+        def _download():
+            # FRESH digest auth per request: these terminals issue a short-lived
+            # nonce, so reusing one HTTPDigestAuth object across many downloads
+            # sends a stale nonce and gets 401 after the first image. A new auth
+            # per download re-handshakes and succeeds.
+            a = _Digest(d["username"], d["password"])
+            return _requests.get(face_url, auth=a, timeout=20, verify=False)
+
         try:
-            r2 = _requests.get(face_url, auth=auth, timeout=20, verify=False)
+            r2 = _download()
+            if r2.status_code == 401:
+                # stale-nonce / transient — one fresh retry
+                _time.sleep(0.5)
+                r2 = _download()
             if r2.status_code == 200 and r2.content[:2] == b'\xff\xd8':
                 if store_face_bytes(emp_id, r2.content):
                     pulled += 1
@@ -140,9 +181,11 @@ def pull_faces_from_device(device_id: int) -> dict:
                     failed += 1
             else:
                 failed += 1
+                log.debug(f"[FACE PULL] {emp_id} download status={r2.status_code}")
         except Exception as e:
             failed += 1
             log.debug(f"[FACE PULL] {emp_id} error: {e}")
+        _time.sleep(0.3)
 
     log.info(f"[FACE PULL] {d['name']}: pulled={pulled} skipped={skipped} failed={failed}")
     return {"pulled": pulled, "skipped": skipped, "failed": failed, "employees": emp_list}
@@ -222,20 +265,45 @@ def push_faces_to_device(device_id: int, force: bool = False) -> dict:
             "faceLibType": "blackFD", "FDID": "1",
             "FPID": emp, "name": emp, "employeeNo": emp,
         })
-        auth = _Digit(username, password)
-        try:
-            r = _requests.put(
+
+        def _attempt():
+            """One push attempt with a fresh digest. Returns (ok, status, text)."""
+            a = _Digit(username, password)
+            rr = _requests.put(
                 f"http://{ip}/ISAPI/Intelligent/FDLib/FDSetUp?format=json",
-                auth=auth,
+                auth=a,
                 files={
                     "FaceDataRecord": (None, metadata, "application/json"),
                     "FaceImage":      (f"{emp}.jpg", data, "image/jpeg"),
                 }, timeout=30, verify=False)
-            if r.status_code < 400:
+            return (rr.status_code < 400, rr.status_code, rr.text[:120])
+
+        ok = False
+        try:
+            ok, status, text = _attempt()
+            if not ok:
+                # Distinguish a temporary LOCKOUT (worth waiting ~2min and
+                # retrying) from a PERMANENT error like employeeNoNotExist or
+                # invalid content (retrying never helps — don't waste the wait).
+                permanent = ("employeeNoNotExist" in text) \
+                            or ("Invalid Content" in text) \
+                            or ("notSupport" in text)
+                lockout = (not permanent) and (
+                    ("401" in str(status)) or ("userCheck" in text)
+                    or ("busy" in text.lower()) or ("exceed" in text.lower()))
+                if permanent:
+                    # No retry — record and move on immediately.
+                    failed += 1
+                    log.warning(f"[FACE PUSH] {emp} -> {d['name']} SKIPPED (permanent): {text[:80]}")
+                    time.sleep(1)
+                    continue
+                time.sleep(120 if lockout else 8)
+                ok, status, text = _attempt()
+            if ok:
                 pushed += 1
             else:
                 failed += 1
-                log.warning(f"[FACE PUSH] {emp} -> {d['name']} FAILED: {r.text[:80]}")
+                log.warning(f"[FACE PUSH] {emp} -> {d['name']} FAILED after retry: {text[:100]}")
         except Exception as e:
             failed += 1
             log.warning(f"[FACE PUSH] {emp} -> {d['name']} ERROR: {e}")

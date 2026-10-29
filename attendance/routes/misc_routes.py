@@ -207,6 +207,9 @@ def company_settings():
             val = request.form.get(key, "")
             if key != "smtp_pass" or val:  # only update password if provided
                 set_setting(key, val)
+        # Daily report toggle — an unchecked checkbox is absent from the POST,
+        # so set it explicitly to "1"/"0".
+        set_setting("daily_report_enabled", "1" if request.form.get("daily_report_enabled") else "0")
         flash("Settings saved", "success")
         return redirect(url_for("company.company_settings"))
     from services.settings import get_company_settings
@@ -215,6 +218,7 @@ def company_settings():
     smtp = {k: get_setting(k, "") for k in
             ["smtp_sender","smtp_host","smtp_port","report_recipient",
              "work_start_time","work_end_time","week_type","tz_offset"]}
+    smtp["daily_report_enabled"] = get_setting("daily_report_enabled", "1")
     return render_template("company.html", data=data, smtp=smtp, T=g.T)
 
 # ─── MISC ────────────────────────────────────────────────────────────────────

@@ -493,10 +493,12 @@ class HikvisionISAPI:
 
     def list_users(self, page_size: int = 50) -> set:
         """Return set of employeeNo strings on the device."""
-        import uuid
+        import uuid, time
+        from requests.auth import HTTPDigestAuth
         url  = f"{self.base}/AccessControl/UserInfo/Search?format=json"
         search_id = str(uuid.uuid4())
         pos, out = 0, set()
+        consecutive_errors = 0
         while True:
             payload = {"UserInfoSearchCond": {
                 "searchID": search_id,
@@ -504,11 +506,29 @@ class HikvisionISAPI:
                 "maxResults": page_size,
             }}
             try:
-                r = requests.post(url, json=payload, auth=self.auth,
+                # Fresh digest per page — these terminals issue short-lived
+                # nonces, so a reused auth object 401s after page 1 and
+                # previously broke the loop, returning an INCOMPLETE user list
+                # (which made user-sync push nothing / drift the device counts).
+                page_auth = HTTPDigestAuth(self.username, self.password)
+                r = requests.post(url, json=payload, auth=page_auth,
                                   timeout=self.timeout, verify=self.verify)
                 if r.status_code >= 400:
-                    break
-                data  = r.json()
+                    consecutive_errors += 1
+                    if consecutive_errors >= 3:
+                        log.warning(f"[ISAPI] list_users giving up at pos={pos} after 3 errors")
+                        break
+                    time.sleep(2)
+                    continue
+                consecutive_errors = 0
+                try:
+                    data = r.json()
+                except Exception:
+                    consecutive_errors += 1
+                    if consecutive_errors >= 3:
+                        break
+                    time.sleep(2)
+                    continue
                 root  = (data.get("UserInfoSearch") or
                          data.get("UserInfoSearchResult") or {})
                 users = root.get("UserInfo", [])
@@ -523,9 +543,13 @@ class HikvisionISAPI:
                 if root.get("responseStatusStrg") != "MORE":
                     break
                 pos += len(users)
+                time.sleep(0.4)
             except Exception as e:
-                log.debug(f"[ISAPI] list_users error: {e}")
-                break
+                consecutive_errors += 1
+                log.debug(f"[ISAPI] list_users error at pos={pos}: {e}")
+                if consecutive_errors >= 3:
+                    break
+                time.sleep(2)
         return out
 
     # ── Face upload ───────────────────────────────────────────────────────────
@@ -699,10 +723,13 @@ class HikvisionISAPI:
         Uses /ISAPI/AccessControl/AcsEvent with major=5, minor=75.
         """
         import os as _os
+        import time as _t
+        from requests.auth import HTTPDigestAuth as _Digest
         tz = _os.environ.get("TZ_OFFSET", "-06:00")
         url    = f"{self.base}/AccessControl/AcsEvent?format=json"
         all_events = []
         position   = 0
+        consecutive_errors = 0
 
         while True:
             payload = {
@@ -718,12 +745,30 @@ class HikvisionISAPI:
                 }
             }
             try:
-                r = requests.post(url, json=payload, auth=self.auth,
+                # Fresh digest per page — these terminals issue short-lived
+                # nonces, so a reused auth object 401s (often on the very first
+                # AcsEvent page after an earlier call in the same cycle), which
+                # previously broke the loop and returned ZERO events despite the
+                # device holding hundreds. This is why the hourly fetch got 0.
+                page_auth = _Digest(self.username, self.password)
+                r = requests.post(url, json=payload, auth=page_auth,
                                   timeout=30, verify=self.verify)
                 if r.status_code >= 400:
-                    break
-
-                data   = r.json()
+                    consecutive_errors += 1
+                    if consecutive_errors >= 3:
+                        log.warning(f"[ISAPI] AcsEvent giving up at pos={position} after 3 errors (status {r.status_code})")
+                        break
+                    _t.sleep(2)
+                    continue
+                consecutive_errors = 0
+                try:
+                    data = r.json()
+                except Exception:
+                    consecutive_errors += 1
+                    if consecutive_errors >= 3:
+                        break
+                    _t.sleep(2)
+                    continue
                 root   = data.get("AcsEvent") or {}
                 events = root.get("InfoList", [])
                 if isinstance(events, dict):
@@ -735,10 +780,14 @@ class HikvisionISAPI:
                 if root.get("responseStatusStrg", "") != "MORE":
                     break
                 position += len(events)
+                _t.sleep(0.3)
 
             except Exception as e:
-                log.debug(f"[ISAPI] AcsEvent pagination error: {e}")
-                break
+                consecutive_errors += 1
+                log.debug(f"[ISAPI] AcsEvent pagination error at pos={position}: {e}")
+                if consecutive_errors >= 3:
+                    break
+                _t.sleep(2)
 
         if all_events:
             log.info(f"[ISAPI] fetch_events total: {len(all_events)} events")

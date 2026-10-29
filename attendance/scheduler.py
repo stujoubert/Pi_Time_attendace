@@ -1,10 +1,11 @@
 """
 scheduler.py
 Background jobs using APScheduler:
-- Every 1 hour  : fetch events from all active devices
+- Every 10 min  : fetch events from all active devices
 - Every 1h 5min : auto-create user records from new event employee IDs
 - Every 6 hours : push all DB user records to every device (cross-device user sync)
 - Daily 03:00   : pull faces from all devices → push to all devices (full face sync)
+- Daily 09:00   : send previous day's attendance email report
 - Weekly Mon 06:00: send weekly attendance email report
 """
 import os
@@ -84,6 +85,15 @@ def _job_weekly_email():
         log.error(f"[WEEKLY EMAIL] error: {e}")
 
 
+def _job_daily_email():
+    try:
+        from services.email_report import send_daily_report
+        sent = send_daily_report()
+        log.info(f"[DAILY EMAIL] {'sent' if sent else 'skipped (disabled or SMTP not configured)'}")
+    except Exception as e:
+        log.error(f"[DAILY EMAIL] error: {e}")
+
+
 def start_scheduler(app):
     global _scheduler
     if _scheduler and _scheduler.running:
@@ -92,9 +102,11 @@ def start_scheduler(app):
     tz = os.getenv("SCHEDULER_TZ", "America/Mexico_City")
     _scheduler = BackgroundScheduler(timezone=tz, daemon=True)
 
-    # Hourly event fetch
-    _scheduler.add_job(_job_fetch_all, IntervalTrigger(hours=1),
-                       id="fetch_all", name="Hourly device event fetch",
+    # Event fetch every 10 minutes (was hourly) — so punches appear within
+    # ~10 min instead of up to an hour. Window is 24h wide + dedup, so frequent
+    # overlapping fetches are safe and free of duplicates.
+    _scheduler.add_job(_job_fetch_all, IntervalTrigger(minutes=10),
+                       id="fetch_all", name="Device event fetch (10 min)",
                        replace_existing=True, misfire_grace_time=300)
 
     # Auto-create users 5 min after each fetch
@@ -122,8 +134,13 @@ def start_scheduler(app):
                        id="weekly_email", name="Weekly email report",
                        replace_existing=True)
 
+    # Daily email 09:00 — previous day's attendance report
+    _scheduler.add_job(_job_daily_email, CronTrigger(hour=9, minute=0),
+                       id="daily_email", name="Daily email report (09:00)",
+                       replace_existing=True)
+
     _scheduler.start()
-    log.info("Scheduler started — hourly fetch | 6h user sync | daily face sync | weekly email")
+    log.info("Scheduler started — 10-min fetch | 6h user sync | daily face sync | daily 09:00 email | weekly email")
     return _scheduler
 
 
